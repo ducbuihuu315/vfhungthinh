@@ -89,7 +89,12 @@ HINH_ANH_XE = {
     "VF 6": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%206.jpg",
     "VF 7": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%207.jpg",
     "VF 8": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%208.jpg",
-    "VF 9": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%209.jpg"
+    "VF 9": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%209.jpg",
+    "Minio Green": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/Minio%20Green.jpg",
+    "Herio Green": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/Herio%20Green.jpg",
+    "Limo Green": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/Limo%20Green.jpg",
+    "VF MPV 7": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%20MPV%207.jpg",
+    "EC Van": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/EC%20Van.jpg"
 }
 
 def hien_thi_anh_xe(dong_xe):
@@ -104,38 +109,63 @@ def hien_thi_anh_xe(dong_xe):
     elif dong_xe in HINH_ANH_XE:
         st.image(HINH_ANH_XE[dong_xe], caption=f"Xe VinFast {dong_xe}", use_container_width=True)
 
-# Dữ liệu xe VinFast chi tiết (Bổ sung Trần xe, Tính năng nổi bật, So sánh)
+# Dữ liệu đầy đủ 19 phiên bản dòng xe VinFast
 data_vinfast = {
-    "Dòng xe": ["VF 2", "VF 3", "VF 5 Plus", "VF 6", "VF 7", "VF 8", "VF 9"],
-    "Phân khúc": ["Mini Car", "Mini SUV", "SUV Hạng A", "SUV Hạng B", "SUV Hạng C", "SUV Hạng D", "SUV Hạng E"],
-    "Giá niêm yết (VND)": [188000000, 302000000, 529000000, 689000000, 789000000, 1069000000, 1499000000],
-    "Quãng đường/sạc": ["~120 - 150 km", "~210 km", "~326 km", "~399 km", "~450 km", "~471 km", "~626 km"],
-    "Trần xe": [
-        "Trần thép", 
-        "Trần thép", 
-        "Trần thép", 
-        "Trần thép (Bản Eco) / Kính (Bản Plus)", 
-        "Trần thép (Bản Eco) / Kính toàn cảnh (Bản Plus)", 
-        "Trần thép (Bản Eco) / Kính toàn cảnh (Bản Plus)", 
-        "Trần kính toàn cảnh chống tia UV"
+    "Phân khúc": [
+        "Micro-car", "Mini SUV", "Mini SUV", "SUV Cỡ A", "SUV Cỡ B", "SUV Cỡ B",
+        "SUV Cỡ C", "SUV Cỡ C", "SUV Cỡ C", "SUV Cỡ D", "SUV Cỡ D", "SUV Cỡ E", "SUV Cỡ E",
+        "Hatchback Dịch vụ", "Sedan/Hatchback B", "MPV Dịch vụ", "MPV Cao cấp", "Xe tải Van", "Xe tải Van"
     ],
-    "Tính năng nổi trội": [
-        "Nhỏ gọn tối ưu đô thị, chi phí vận hành siêu rẻ",
-        "Thiết kế SUV vuông vức cá tính, khoảng sáng gầm cao, màn hình 10 inch",
-        "6 túi khí, cảnh báo điểm mù, luồng giao thông đến khi mở cửa, giá cực tốt",
-        "Trợ lý ảo ViVi, ADAS cấp độ 2, chip xử lý hiện đại, nội thất da cao cấp",
-        "Thiết kế phi thuyền cá tính, công suất tới 349 mã lực, HUD hắt kính, ADAS đầy đủ",
-        "Động cơ 402 mã lực, dẫn động 4 bánh AWD, sưởi/thông gió hàng ghế trước",
-        "Nội thất Thương gia VIP, ghế massage, màn hình 15.6 inch, hệ thống treo khí nén"
+    "Dòng xe": [
+        "VF 2", "VF 3", "VF 3", "VF 5 Plus", "VF 6", "VF 6",
+        "VF 7", "VF 7", "VF 7", "VF 8", "VF 8", "VF 9", "VF 9",
+        "Minio Green", "Herio Green", "Limo Green", "VF MPV 7", "EC Van", "EC Van"
     ],
-    "So sánh cùng phân khúc": [
-        "Vượt trội Wuling Mini EV về quãng đường đi và độ an toàn khung gầm",
-        "Rộng rãi và nhiều trang bị công nghệ hơn các dòng xe xăng hạng A giá rẻ",
-        "Chi phí lăn bánh rẻ hơn Raize, Sonet; công nghệ an toàn ADAS vượt trội",
-        "Mạnh mẽ hơn Seltos, Creta; chi phí nhiên liệu chỉ bằng 1/3 xe xăng",
-        "Tăng tốc nhanh hơn CX-5, CR-V, Tucson; công nghệ thông minh áp đảo",
-        "Động cơ mạnh tương đương Porsche Macan, chi phí bảo dưỡng cực thấp hơn SantaFe, Sorento",
-        "Đẳng cấp tương đương Lexus RX, BMW X5 nhưng giá chỉ bằng 1/3"
+    "Phiên bản": [
+        "Tiêu chuẩn", "Eco", "Plus", "Tiêu chuẩn", "Eco", "Plus",
+        "Eco", "Plus Standard", "Plus Premium", "Eco (CATL)", "Plus (CATL)", "Eco (CATL)", "Plus (CATL)",
+        "Tiêu chuẩn", "Tiêu chuẩn", "7 chỗ", "Tiêu chuẩn", "Tiêu chuẩn", "Nâng cấp"
+    ],
+    "Giá niêm yết (VND)": [
+        188000000, 302000000, 315000000, 529000000, 689000000, 745000000,
+        789000000, 919000000, 999000000, 1069000000, 1199000000, 1499000000, 1699000000,
+        269000000, 499000000, 749000000, 819000000, 1746000000, 285000000
+    ],
+    "Hệ thống dẫn động": [
+        "1 cầu (RWD)", "1 cầu (RWD)", "1 cầu (RWD)", "1 cầu (FWD)", "1 cầu (FWD)", "1 cầu (FWD)",
+        "1 cầu (FWD)", "1 cầu (FWD)", "2 cầu (AWD)", "1 cầu (FWD)", "2 cầu (AWD)", "2 cầu (AWD)", "2 cầu (AWD)",
+        "1 cầu (FWD)", "1 cầu (FWD)", "1 cầu (FWD)", "1 cầu (FWD)", "1 cầu (RWD)", "1 cầu (RWD)"
+    ],
+    "Loại trần xe": [
+        "Trần thép", "Trần thép", "Trần thép", "Trần thép", "Trần thép", "Trần thép",
+        "Trần thép", "Trần thép", "Trần kính toàn cảnh", "Trần thép", "Trần thép (Tùy chọn kính)", "Trần thép", "Trần kính toàn cảnh",
+        "Trần thép", "Trần thép", "Trần thép", "Trần thép", "Trần thép", "Trần thép"
+    ],
+    "Quãng đường tối đa": [
+        "~120 - 150 km", "~210 km (NEDC)", "~210 km (NEDC)", "~326 km (NEDC)", "~399 km (WLTP)", "~381 km (WLTP)",
+        "~450 km (WLTP)", "~431 km (WLTP)", "~431 km (WLTP)", "~471 km (WLTP)", "~450 km (WLTP)", "~626 km (WLTP)", "~602 km (WLTP)",
+        "~160 - 180 km", "~300 - 320 km", "~400 km", "~420 km", "~120 - 140 km", "~140 km"
+    ],
+    "Tính năng nổi bật": [
+        "Bán kính quay đầu cực nhỏ, hỗ trợ sạc nhanh tại nhà qua điện dân dụng gia đình.",
+        "Thiết kế vuông vức cá tính, màn hình giải trí 10 inch, cần số tích hợp sau vô lăng.",
+        "Mâm đúc thể thao hợp kim, màu sơn phối 2 tông thời trang cá nhân hóa cao.",
+        "Cảnh báo điểm mù, cảnh báo phương tiện cắt ngang phía sau, trang bị sẵn 6 túi khí an toàn.",
+        "Màn hình cảm ứng hướng về người lái, ghế bọc nỉ pha da cao cấp, ga tự động Cruise Control.",
+        "Hệ thống hỗ trợ lái thông minh ADAS cấp độ 2 nâng cao, mâm xe lớn thể thao 19 inch.",
+        "Thiết kế phong cách phi thuyền tương lai, tay nắm cửa ẩn cơ học mượt mà, mâm 19 inch.",
+        "Động cơ nâng cấp lên 201 hp, cốp sau đóng mở điện tiện lợi, nội thất bọc da mịn.",
+        "Hệ dẫn động AWD công suất 349 hp mạnh mẽ, màn hình thông tin trên kính lái HUD, trần kính.",
+        "Màn hình trung tâm siêu lớn 15.6 inch, hỗ trợ trợ lý ảo thông minh tiếng Việt đa vùng miền.",
+        "Ghế da thật cao cấp chỉnh điện đa hướng tích hợp chức năng sấy ấm và thông gió làm mát.",
+        "Không gian nội thất SUV cỡ đại 7 chỗ ngồi thực tế rộng rãi, hệ thống loa cao cấp.",
+        "Hàng ghế thứ 2 kiểu VIP cơ trưởng, tích hợp massage/sưởi/thông gió, trần kính Panorama.",
+        "Chi phí sạc điện siêu rẻ, kết nối app quản lý taxi công nghệ phục vụ doanh thu.",
+        "Thiết kế Sedan trường dáng lịch sự, cốp sau rộng để được nhiều vali hành lý của khách.",
+        "Hàng ghế khoang khách bọc da êm ái biệt lập, bệ tỳ tay lớn, hỗ trợ cổng sạc nhanh.",
+        "Cấu hình MPV gia đình thực dụng, sàn phẳng tối ưu chỗ để chân, cửa gió điều hòa độc lập.",
+        "Khoang sau hoán cải hoàn toàn phẳng, vách ngăn cabin kiên cố, được lưu thông phố 24/7.",
+        "Cửa lùa trượt mượt mà hai bên hông xe, nâng cấp điều hòa làm lạnh nhanh và trợ lực vô lăng lái."
     ]
 }
 
@@ -144,20 +174,21 @@ cac_dong_xe = sorted(list(set(data_vinfast["Dòng xe"])))
 cac_mau_xe = ["Trắng", "Đen", "Xám", "Bạc", "Xanh", "Đỏ"]
 
 def hien_thi_thong_tin_so_sanh(dong_xe):
-    """Hàm hiển thị bảng so sánh & tính năng nổi bật của xe"""
-    row = df_vinfast[df_vinfast["Dòng xe"] == dong_xe].iloc[0]
+    """Hàm hiển thị danh sách các phiên bản & tính năng nổi bật của xe được chọn"""
+    df_sub = df_vinfast[df_vinfast["Dòng xe"] == dong_xe]
     
-    col1, col2 = st.columns(2)
-    with col1:
-        st.info(f"🧱 **Loại trần xe:** {row['Trần xe']}")
-        st.success(f"🔋 **Quãng đường:** {row['Quãng đường/sạc']}")
-    with col2:
-        st.warning(f"🏷️ **Phân khúc:** {row['Phân khúc']}")
-        st.error(f"💰 **Giá niêm yết:** {row['Giá niêm yết (VND)']:,.0f} VNĐ")
-        
-    st.markdown("---")
-    st.markdown(f"✨ **Tính năng nổi trội cùng phân khúc:**\n- {row['Tính năng nổi trội']}")
-    st.markdown(f"⚔️ **So sánh đối thủ cùng tầm giá:**\n- {row['So sánh cùng phân khúc']}")
+    for idx, row in df_sub.iterrows():
+        st.markdown(f"#### 📌 Phiên bản: **{row['Phiên bản']}**")
+        col1, col2 = st.columns(2)
+        with col1:
+            st.info(f"🧱 **Loại trần:** {row['Loại trần xe']}")
+            st.success(f"🔋 **Quãng đường:** {row['Quãng đường tối đa']}")
+        with col2:
+            st.warning(f"⚙️ **Dẫn động:** {row['Hệ thống dẫn động']}")
+            st.error(f"💰 **Giá niêm yết:** {row['Giá niêm yết (VND)']:,.0f} VNĐ")
+            
+        st.markdown(f"✨ **Tính năng nổi bật:** {row['Tính năng nổi bật']}")
+        st.markdown("---")
 
 # ==============================================================================
 # 3. HÀM KẾT NỐI VÀ LƯU DỮ LIỆU
@@ -258,16 +289,14 @@ elif st.session_state.page == "khach_den":
     # Hiển thị hình ảnh xe chọn
     hien_thi_anh_xe(xe_chon)
 
-    # Hiển thị phân tích nổi bật & So sánh đối thủ
-    with st.expander(f"🔍 Xem So sánh & Tính năng nổi bật của {xe_chon}", expanded=True):
+    # Hiển thị phân tích nổi bật & các phiên bản
+    with st.expander(f"🔍 Xem Chi tiết các phiên bản & Tính năng của {xe_chon}", expanded=True):
         hien_thi_thong_tin_so_sanh(xe_chon)
-
-    st.write("---")
 
     with st.form("form_khach_den", clear_on_submit=True):
         ma_nv = st.text_input("Mã nhân viên tư vấn/hẹn trước: *")
         ho_ten = st.text_input("Họ và tên khách hàng: *")
-        muc_dich = st.selectbox("Mục đích sử dụng xe: *", ["Chạy gia đình", "Chạy dịch vụ"])
+        muc_dich = st.selectbox("Mục đích sử dụng xe: *", ["Chạy gia đình", "Chạy dịch vụ", "Vận tải / Kinh doanh"])
         phan_khuc = st.text_input("Phân khúc xe yêu cầu: *", placeholder="Ví dụ: SUV hạng A, C...")
         mau_sac = st.selectbox("Màu sắc lựa chọn: *", cac_mau_xe)
         vay_ngan_hang = st.radio("Cần hỗ trợ vay ngân hàng?", ["Không", "Có"], horizontal=True)
@@ -312,7 +341,7 @@ elif st.session_state.page == "khach_ve":
         for idx, xe in enumerate(ds_xe_da_xem):
             with cols[idx]:
                 hien_thi_anh_xe(xe)
-                with st.expander(f"ℹ️ Tính năng & So sánh {xe}"):
+                with st.expander(f"ℹ️ Các phiên bản {xe}"):
                     hien_thi_thong_tin_so_sanh(xe)
 
     st.write("---")
@@ -353,11 +382,11 @@ elif st.session_state.page == "tra_cuu":
     xe_xem_anh = st.selectbox("Chọn dòng xe để tra cứu chi tiết:", cac_dong_xe)
     hien_thi_anh_xe(xe_xem_anh)
     
-    st.markdown(f"### ⚡ Chi tiết xe VinFast {xe_xem_anh}")
+    st.markdown(f"### ⚡ Thông tin chi tiết xe VinFast {xe_xem_anh}")
     hien_thi_thong_tin_so_sanh(xe_xem_anh)
     
     st.write("---")
-    st.markdown("**📊 Bảng tổng hợp so sánh tất cả các dòng xe:**")
+    st.markdown("**📊 Bảng tổng hợp tất cả 19 phiên bản các dòng xe:**")
     df_display = df_vinfast.copy()
     df_display["Giá niêm yết (VND)"] = df_display["Giá niêm yết (VND)"].apply(lambda x: f"{x:,.0f} VNĐ")
     st.dataframe(df_display, use_container_width=True, hide_index=True)
