@@ -13,7 +13,7 @@ except ImportError:
     HAS_GSPREAD = False
 
 # ==============================================================================
-# 1. CẤU HÌNH TRANG STREAMLIT
+# 1. CẤU HÌNH TRANG & MÀN HÌNH NỀN (BACKGROUND)
 # ==============================================================================
 st.set_page_config(
     page_title="VinFast Hưng Thịnh Phát",
@@ -22,15 +22,38 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-st.markdown("""
+# Đường dẫn ảnh nền (sử dụng ảnh từ GitHub repo hoặc link online)
+URL_ANH_NEN = "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/nen.jpg"
+
+st.markdown(f"""
     <style>
-    .stApp { background-color: #121212; color: #ffffff; }
-    .main-title { text-align: center; color: #ffffff; font-weight: bold; font-size: 22px; margin-bottom: 20px; background-color: #1e1e1e; padding: 15px; border-radius: 12px; border: 1px solid #333333; }
-    .main-title a { color: #ffffff !important; text-decoration: none !important; }
-    .main-title a:hover { color: #00d26a !important; }
-    .sub-title { color: #ffc107; font-weight: bold; font-size: 18px; text-align: center; margin-bottom: 15px; }
+    /* Cấu hình màn hình nền có lớp phủ tối để nổi bật chữ */
+    .stApp {{
+        background: linear-gradient(rgba(18, 18, 18, 0.85), rgba(18, 18, 18, 0.85)), 
+                    url('{URL_ANH_NEN}');
+        background-size: cover;
+        background-position: center;
+        background-repeat: no-repeat;
+        background-attachment: fixed;
+        color: #ffffff;
+    }}
     
-    div.stButton > button {
+    .main-title {{ 
+        text-align: center; 
+        color: #ffffff; 
+        font-weight: bold; 
+        font-size: 22px; 
+        margin-bottom: 20px; 
+        background-color: rgba(30, 30, 30, 0.9); 
+        padding: 15px; 
+        border-radius: 12px; 
+        border: 1px solid #333333; 
+    }}
+    .main-title a {{ color: #ffffff !important; text-decoration: none !important; }}
+    .main-title a:hover {{ color: #00d26a !important; }}
+    .sub-title {{ color: #ffc107; font-weight: bold; font-size: 18px; text-align: center; margin-bottom: 15px; }}
+    
+    div.stButton > button {{
         width: 100% !important;
         height: 55px !important;
         font-weight: bold !important;
@@ -42,21 +65,44 @@ st.markdown("""
         border: 2px solid #00d26a !important;
         box-shadow: 0px 4px 10px rgba(0, 210, 106, 0.2) !important;
         transition: all 0.2s ease-in-out !important;
-    }
-    div.stButton > button:hover, div.stButton > button:active {
+    }}
+    div.stButton > button:hover, div.stButton > button:active {{
         background: #00d26a !important; color: #000000 !important; border-color: #00d26a !important;
-    }
+    }}
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. KHỞI TẠO SESSION & DỮ LIỆU DÙNG CHUNG
+# 2. KHỜI TẠO SESSION & DỮ LIỆU CÁC DÒNG XE & HÌNH ẢNH
 # ==============================================================================
 if "page" not in st.session_state:
     st.session_state.page = "home"
 
 def set_page(page_name):
     st.session_state.page = page_name
+
+# Đường dẫn/URL hình ảnh cho từng dòng xe
+HINH_ANH_XE = {
+    "VF 2": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf2.png",
+    "VF 3": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf3.png",
+    "VF 5 Plus": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf5.png",
+    "VF 6": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf6.png",
+    "VF 7": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf7.png",
+    "VF 8": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf8.png",
+    "VF 9": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf9.png"
+}
+
+def hien_thi_anh_xe(dong_xe):
+    """Hàm hiển thị hình ảnh xe (Ưu tiên tệp cục bộ trong thư mục hinhanh/, nếu không có sẽ lấy URL)"""
+    file_local_png = f"hinhanh/{dong_xe.lower().replace(' ', '')}.png"
+    file_local_jpg = f"hinhanh/{dong_xe.lower().replace(' ', '')}.jpg"
+    
+    if os.path.exists(file_local_png):
+        st.image(file_local_png, caption=f"Xe VinFast {dong_xe}", use_container_width=True)
+    elif os.path.exists(file_local_jpg):
+        st.image(file_local_jpg, caption=f"Xe VinFast {dong_xe}", use_container_width=True)
+    elif dong_xe in HINH_ANH_XE:
+        st.image(HINH_ANH_XE[dong_xe], caption=f"Xe VinFast {dong_xe}", use_container_width=True)
 
 # Dữ liệu xe VinFast dùng chung
 data_vinfast = {
@@ -164,7 +210,10 @@ elif st.session_state.page == "khach_den":
 
     xe_chon = st.selectbox("Dòng xe bạn quan tâm: *", cac_dong_xe)
 
-    st.markdown(f"**📊 Chi tiết thông số so sánh dòng xe {xe_chon}:**")
+    # Hiển thị hình ảnh xe chọn
+    hien_thi_anh_xe(xe_chon)
+
+    st.markdown(f"**📊 Chi tiết thông số dòng xe {xe_chon}:**")
     df_sub = df_vinfast[df_vinfast["Dòng xe"] == xe_chon]
     st.dataframe(df_sub, use_container_width=True, hide_index=True)
     st.write("---")
@@ -212,7 +261,13 @@ elif st.session_state.page == "khach_ve":
     ds_xe_da_xem = st.multiselect("Dòng xe khách đã xem: *", cac_dong_xe, default=[cac_dong_xe[0]])
 
     if ds_xe_da_xem:
-        st.markdown(f"**📊 Chi tiết thông số so sánh dòng xe đã xem:**")
+        # Hiển thị ảnh các xe được chọn theo dạng cột
+        cols = st.columns(len(ds_xe_da_xem))
+        for idx, xe in enumerate(ds_xe_da_xem):
+            with cols[idx]:
+                hien_thi_anh_xe(xe)
+
+        st.markdown(f"**📊 Chi tiết thông số dòng xe đã xem:**")
         df_sub_ve = df_vinfast[df_vinfast["Dòng xe"].isin(ds_xe_da_xem)]
         st.dataframe(df_sub_ve, use_container_width=True, hide_index=True)
     st.write("---")
@@ -245,11 +300,16 @@ elif st.session_state.page == "khach_ve":
         st.rerun()
 
 # ==============================================================================
-# 7. MÀN HÌNH TRA CỨU BẢNG GIÁ / THÔNG SỐ XE
+# 7. MÀN HÌNH TRA CỨU BẢNG GIÁ / THÔNG SỐ XE & XEM HÌNH ẢNH
 # ==============================================================================
 elif st.session_state.page == "tra_cuu":
     st.markdown('<div class="sub-title">📋 TRA CỨU BẢNG GIÁ & THÔNG SỐ XE VINFAST</div>', unsafe_allow_html=True)
     
+    xe_xem_anh = st.selectbox("Chọn dòng xe để xem hình ảnh trực quan:", cac_dong_xe)
+    hien_thi_anh_xe(xe_xem_anh)
+    
+    st.write("---")
+    st.markdown("**📊 Bảng tổng hợp thông số & Giá niêm yết:**")
     df_display = df_vinfast.copy()
     df_display["Giá niêm yết (VND)"] = df_display["Giá niêm yết (VND)"].apply(lambda x: f"{x:,.0f} VNĐ")
     st.dataframe(df_display, use_container_width=True, hide_index=True)
