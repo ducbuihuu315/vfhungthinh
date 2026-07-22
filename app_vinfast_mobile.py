@@ -166,7 +166,8 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
     if "Khách Đến" not in wb.sheetnames:
         wb.create_sheet("Khách Đến").append(["Thời gian", "Loại khách", "Mã NV", "Họ tên KH", "Dòng xe", "Mục đích sử dụng", "Màu sắc", "Nhu cầu vay", "SDT"])
     if "Khách Về" not in wb.sheetnames:
-        wb.create_sheet("Khách Về").append(["Thời gian", "Trạng thái cọc", "Mã NV", "Họ tên", "SDT", "CCCD", "Tiền cọc"])
+    wb.create_sheet("Khách Về").append([
+        "Thời gian", "Trạng thái cọc", "Mã NV", "Họ tên", "SDT", "CCCD", "Xe đã xem", "Tiền cọc"
 
     ws = wb["Khách Đến" if loai == "KHÁCH ĐẾN" else "Khách Về"]
     ws.append(hang_du_lieu)
@@ -289,6 +290,21 @@ elif st.session_state.page == "khach_ve":
     da_coc = st.radio("Khách hàng đã đặt cọc xe chưa?", ["Chưa cọc (Chưa đặt)", "Đã đặt cọc xe"], horizontal=True)
     is_coc = (da_coc == "Đã đặt cọc xe")
 
+    # 1. Chọn dòng xe khách đã xem (Đưa ra ngoài Form để phản hồi & cập nhật tức thì)
+    ds_xe_da_xem = st.multiselect("Dòng xe khách đã xem: *", cac_dong_xe, default=[cac_dong_xe[0]])
+
+    # 2. Hiển thị bảng thông số so sánh chi tiết cho các xe đã chọn
+    if ds_xe_da_xem:
+        st.markdown(f"**📊 Chi tiết thông số so sánh dòng xe đã xem ({', '.join(ds_xe_da_xem)}):**")
+        df_sub_ve = df_vinfast[df_vinfast["Dòng xe"].isin(ds_xe_da_xem)]
+        st.dataframe(
+            df_sub_ve[["Dòng xe", "Phiên bản", "Giá niêm yết (VND)", "Hệ thống dẫn động", "Loại trần xe", "Quãng đường tối đa"]],
+            use_container_width=True,
+            hide_index=True
+        )
+    st.write("---")
+
+    # 3. Form nhập thông tin khách rời showroom
     with st.form("form_khach_ve", clear_on_submit=True):
         ma_nv = st.text_input("Mã NV tư vấn: *")
         ho_ten = st.text_input("Họ tên khách hàng: *")
@@ -302,7 +318,7 @@ elif st.session_state.page == "khach_ve":
         submitted = st.form_submit_button("💾 HOÀN TẤT & LƯU THÔNG TIN", use_container_width=True, type="primary")
 
         if submitted:
-            if not ma_nv.strip() or not ho_ten.strip() or not sdt.strip() or not cccd.strip() or (is_coc and not tien_coc.strip()):
+            if not ma_nv.strip() or not ho_ten.strip() or not sdt.strip() or not cccd.strip() or not ds_xe_da_xem or (is_coc and not tien_coc.strip()):
                 st.error("⚠️ Vui lòng điền đầy đủ các thông tin bắt buộc (*)")
             else:
                 data_row = [
@@ -312,6 +328,7 @@ elif st.session_state.page == "khach_ve":
                     ho_ten.strip(),
                     sdt.strip(),
                     cccd.strip(),
+                    ", ".join(ds_xe_da_xem),  # Cột Xe khách đã xem
                     tien_coc.strip()
                 ]
                 luu_du_lieu_realtime("KHÁCH VỀ", data_row)
