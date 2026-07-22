@@ -182,7 +182,7 @@ if st.session_state.page == "home":
 # 1. KHÂU KHÁCH ĐẾN SHOWROOM
 # ------------------------------------------------------------------------------
 elif st.session_state.page == "khach_den":
-    st.markdown("<div class="sub-title">📥 THÔNG TIN KHÁCH ĐẾN SHOWROOM</div>", unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">📥 THÔNG TIN KHÁCH ĐẾN SHOWROOM</div>', unsafe_allow_html=True)
 
     co_hen = st.radio("Khách hàng đã có hẹn trước chưa?", ["Chưa có hẹn (Vãng lai)", "Đã có hẹn trước"], horizontal=True)
     is_hen = (co_hen == "Đã có hẹn trước")
@@ -235,7 +235,7 @@ elif st.session_state.page == "khach_den":
 # 2. KHÂU KHÁCH RỜI SHOWROOM
 # ------------------------------------------------------------------------------
 elif st.session_state.page == "khach_ve":
-    st.markdown("<div class="sub-title">📤 THÔNG TIN KHÁCH RỜI SHOWROOM</div>", unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">📤 THÔNG TIN KHÁCH RỜI SHOWROOM</div>', unsafe_allow_html=True)
 
     da_coc = st.radio("Khách hàng đã đặt cọc xe chưa?", ["Chưa cọc (Chưa đặt)", "Đã đặt cọc xe"], horizontal=True)
     is_coc = (da_coc == "Đã đặt cọc xe")
@@ -278,7 +278,7 @@ elif st.session_state.page == "khach_ve":
 # 3. TRA CỨU BẢNG GIÁ & THÔNG SỐ XE
 # ------------------------------------------------------------------------------
 elif st.session_state.page == "tra_cuu":
-    st.markdown("<div class="sub-title">📊 TRA CỨU BẢNG GIÁ & THÔNG SỐ XE</div>", unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">📊 TRA CỨU BẢNG GIÁ & THÔNG SỐ XE</div>', unsafe_allow_html=True)
 
     ds_loc = ["-- Tất cả các dòng xe --"] + cac_dong_xe
     dong_xe_chon = st.selectbox("Chọn dòng xe cần tra cứu:", ds_loc)
