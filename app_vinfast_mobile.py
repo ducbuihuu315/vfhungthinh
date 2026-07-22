@@ -1,20 +1,3 @@
-Dưới đây là toàn bộ mã nguồn app_vinfast_mobile.py đã được cập nhật bổ sung đầy đủ:
-
-Bổ sung các thông số chi tiết:
-
-Loại trần xe: Trần kính toàn cảnh / Trần thép.
-
-Tính năng nổi trội cùng phân khúc: ADAS (Lái xe thông minh), Smart Services, trợ lý ảo ViVi, camera 360, v.v.
-
-So sánh xe cùng loại / Đối thủ cùng phân khúc: So sánh trực tiếp với các dòng xe xăng/điện cùng tầm giá.
-
-Cập nhật giao diện hiển thị:
-
-Thêm tab "Đặc điểm nổi bật & So sánh" khi khách chọn xe (ở cả phần Khách đến, Khách rời và Tra cứu).
-
-Giữ nguyên toàn bộ cấu hình ảnh .jpg chuẩn theo thư mục hinhanh trên Repository vfhungthinh.
-
-Python
 import os
 import openpyxl
 import pandas as pd
@@ -166,7 +149,7 @@ def hien_thi_thong_tin_so_sanh(dong_xe):
     
     col1, col2 = st.columns(2)
     with col1:
-        st.info(f"🧱 **Loại trần xe:** {row['Trạng thái trần xe'] if 'Trạng thái trần xe' in row else row['Trần xe']}")
+        st.info(f"🧱 **Loại trần xe:** {row['Trần xe']}")
         st.success(f"🔋 **Quãng đường:** {row['Quãng đường/sạc']}")
     with col2:
         st.warning(f"🏷️ **Phân khúc:** {row['Phân khúc']}")
