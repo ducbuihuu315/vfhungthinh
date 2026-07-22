@@ -60,7 +60,7 @@ if "user_id" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = "login"
 
-# Lấy thông tin User Agent của thiết bị để tạo ID duy nhất
+# Lấy thông tin User Agent của thiết bị
 device_signature = st_javascript("navigator.userAgent")
 
 def set_page(page_name):
@@ -77,19 +77,17 @@ cac_dong_xe = sorted(list(set(data_vinfast["Dòng xe"])))
 cac_mau_xe = ["Trắng", "Đen", "Xám", "Bạc", "Xanh", "Đỏ"]
 
 # ==============================================================================
-# 3. HÀM XÁC THỰC DỮ LIỆU & BẢO MẬT THIẾT BỊ (ĐÃ ĐƯỢC CẢI TIẾN)
+# 3. HÀM XÁC THỰC DỮ LIỆU & BẢO MẬT THIẾT BỊ (ĐÃ TỐI ƯU)
 # ==============================================================================
 @st.cache_resource(ttl=600)
 def connect_gsheet():
-    """Hàm kết nối Google Sheet qua ID chính xác và Cache kết nối"""
+    """Hàm kết nối Google Sheet qua ID chính xác"""
     if "gcp_service_account" in st.secrets and HAS_GSPREAD:
         try:
             scope = [
                 "https://www.googleapis.com/auth/spreadsheets",
                 "https://www.googleapis.com/auth/drive"
             ]
-            
-            # Chuyển đổi secrets sang dict chuẩn và sửa lỗi private_key
             creds_dict = dict(st.secrets["gcp_service_account"])
             if "private_key" in creds_dict:
                 creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
@@ -97,7 +95,6 @@ def connect_gsheet():
             creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
             client = gspread.authorize(creds)
             
-            # Sử dụng mở theo ID Google Sheet chính xác của bạn
             SPREADSHEET_ID = "1wo7v0XEEdFABLMWHg80hchf4nwgnPoej9fzCTxOEs4o"
             return client.open_by_key(SPREADSHEET_ID)
         except Exception as e:
@@ -117,10 +114,14 @@ def verify_login(role, user_code, password, device_id):
     except Exception as e:
         return False, f"Lỗi đọc dữ liệu sheet {ws_name}: {e}"
     
+    # Đồng bộ tên cột với Google Sheet
     col_code = "Mã VFHTP" if role == "VFHTP" else "Mã NV"
     
     for idx, row in enumerate(records, start=2):
-        if str(row.get(col_code, "")).strip() == user_code.strip():
+        # Lấy giá trị mã quản lý / mã NV (Hỗ trợ cả trường hợp tên cột A1 trong sheet QuanLy chưa đổi)
+        val_code = row.get(col_code) or row.get("ban d") or list(row.values())[0]
+        
+        if str(val_code).strip() == user_code.strip():
             if str(row.get("Mật Khẩu", "")).strip() != str(password).strip():
                 return False, "Mật khẩu không chính xác!"
             
@@ -131,7 +132,7 @@ def verify_login(role, user_code, password, device_id):
             if current_device and device_id and current_device != str(device_id).strip():
                 return False, "⛔ Tài khoản này đã đăng nhập trên thiết bị khác! Mỗi tài khoản chỉ dùng trên 1 thiết bị."
             
-            # Cập nhật Device ID nếu chưa có
+            # Cập nhật Device ID nếu chưa ghi nhận
             if not current_device and device_id:
                 cols = list(row.keys())
                 if "Device_ID" in cols:
@@ -140,20 +141,33 @@ def verify_login(role, user_code, password, device_id):
                 
             return True, "Thành công"
             
-    return False, f"Không tìm thấy {col_code} trên hệ thống!"
+    return False, f"Không tìm thấy mã đăng nhập trên hệ thống!"
 
 def luu_du_lieu_realtime(loai, hang_du_lieu):
     # Lưu file Excel cục bộ dự phòng
-    file_name = f"ThongKe_Showroom_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
-    wb = openpyxl.load_workbook(file_name) if os.path.exists(file_name) else openpyxl.Workbook()
-    if "Sheet" in wb.sheetnames: wb.remove(wb["Sheet"])
-    if "Khách Đến" not in wb.sheetnames:
-        wb.create_sheet("Khách Đến").append(["Thời gian", "Loại khách", "Mã NV", "Họ tên KH", "Dòng xe", "Mục đích sử dụng", "Màu sắc", "Nhu cầu vay", "SDT"])
-    if "Khách Về" not in wb.sheetnames:
-        wb.create_sheet("Khách Về").append(["Thời gian", "Trạng thái cọc", "Mã NV", "Họ tên", "SDT", "CCCD", "Xe đã xem", "Tiền cọc"])
-    ws = wb["Khách Đến" if loai == "KHÁCH ĐẾN" else "Khách Về"]
-    ws.append(hang_du_lieu)
-    wb.save(file_name)
+    try:
+        file_name = f"ThongKe_Showroom_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        if os.path.exists(file_name):
+            wb = openpyxl.load_workbook(file_name)
+        else:
+            wb = openpyxl.Workbook()
+            if "Sheet" in wb.sheetnames:
+                wb.remove(wb["Sheet"])
+        
+        ws_title = "Khách Đến" if loai == "KHÁCH ĐẾN" else "Khách Về"
+        if ws_title not in wb.sheetnames:
+            ws = wb.create_sheet(ws_title)
+            if loai == "KHÁCH ĐẾN":
+                ws.append(["Thời gian", "Loại khách", "Mã NV", "Họ tên KH", "Dòng xe", "Mục đích sử dụng", "Màu sắc", "Nhu cầu vay", "SDT"])
+            else:
+                ws.append(["Thời gian", "Trạng thái cọc", "Mã NV", "Họ tên", "SDT", "CCCD", "Xe đã xem", "Tiền cọc"])
+        else:
+            ws = wb[ws_title]
+            
+        ws.append(hang_du_lieu)
+        wb.save(file_name)
+    except Exception as e:
+        print(f"Lỗi ghi Excel cục bộ: {e}")
 
     # Đẩy dữ liệu Realtime lên Google Sheets
     sheet = connect_gsheet()
@@ -251,7 +265,6 @@ elif st.session_state.page == "home":
         set_page("tra_cuu")
         st.rerun()
 
-    # CHỈ MÃ VFHTP MỚI HIỂN THỊ NÚT BÁO CÁO REALTIME
     if st.session_state.user_role == "VFHTP":
         if st.button("4. 📈 BÁO CÁO REALTIME (ĐẶC QUYỀN VFHTP)", use_container_width=True):
             set_page("bao_cao")
