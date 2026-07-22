@@ -77,14 +77,32 @@ cac_dong_xe = sorted(list(set(data_vinfast["Dòng xe"])))
 cac_mau_xe = ["Trắng", "Đen", "Xám", "Bạc", "Xanh", "Đỏ"]
 
 # ==============================================================================
-# 3. HÀM XÁC THỰC DỮ LIỆU & BẢO MẬT THIẾT BỊ
+# 3. HÀM XÁC THỰC DỮ LIỆU & BẢO MẬT THIẾT BỊ (ĐÃ ĐƯỢC CẢI TIẾN)
 # ==============================================================================
+@st.cache_resource(ttl=600)
 def connect_gsheet():
+    """Hàm kết nối Google Sheet qua ID chính xác và Cache kết nối"""
     if "gcp_service_account" in st.secrets and HAS_GSPREAD:
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-        creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
-        client = gspread.authorize(creds)
-        return client.open("ThongKe_Vinfast_Showroom")
+        try:
+            scope = [
+                "https://www.googleapis.com/auth/spreadsheets",
+                "https://www.googleapis.com/auth/drive"
+            ]
+            
+            # Chuyển đổi secrets sang dict chuẩn và sửa lỗi private_key
+            creds_dict = dict(st.secrets["gcp_service_account"])
+            if "private_key" in creds_dict:
+                creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
+            
+            creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
+            client = gspread.authorize(creds)
+            
+            # Sử dụng mở theo ID Google Sheet chính xác của bạn
+            SPREADSHEET_ID = "1wo7v0XEEdFABLMWHg80hchf4nwgnPoej9fzCTxOEs4o"
+            return client.open_by_key(SPREADSHEET_ID)
+        except Exception as e:
+            st.error(f"⚠️ Lỗi kết nối Google Sheets: {e}")
+            return None
     return None
 
 def verify_login(role, user_code, password, device_id):
@@ -97,20 +115,20 @@ def verify_login(role, user_code, password, device_id):
         ws = sheet.worksheet(ws_name)
         records = ws.get_all_records()
     except Exception as e:
-        return False, f"Lỗi đọc dữ liệu: {e}"
+        return False, f"Lỗi đọc dữ liệu sheet {ws_name}: {e}"
     
     col_code = "Mã VFHTP" if role == "VFHTP" else "Mã NV"
     
     for idx, row in enumerate(records, start=2):
         if str(row.get(col_code, "")).strip() == user_code.strip():
-            if str(row.get("Mật Khẩu", "")).strip() != password.strip():
+            if str(row.get("Mật Khẩu", "")).strip() != str(password).strip():
                 return False, "Mật khẩu không chính xác!"
             
             if role == "NHAN_VIEN" and str(row.get("Trạng Thái", "")).strip() != "Đã duyệt":
-                return False, "Tài khoản Nhân viên chưa được cấp Mã VFHTP duyệt!"
+                return False, "Tài khoản Nhân viên chưa được cấp duyệt!"
             
             current_device = str(row.get("Device_ID", "")).strip()
-            if current_device and current_device != str(device_id).strip():
+            if current_device and device_id and current_device != str(device_id).strip():
                 return False, "⛔ Tài khoản này đã đăng nhập trên thiết bị khác! Mỗi tài khoản chỉ dùng trên 1 thiết bị."
             
             # Cập nhật Device ID nếu chưa có
@@ -125,6 +143,7 @@ def verify_login(role, user_code, password, device_id):
     return False, f"Không tìm thấy {col_code} trên hệ thống!"
 
 def luu_du_lieu_realtime(loai, hang_du_lieu):
+    # Lưu file Excel cục bộ dự phòng
     file_name = f"ThongKe_Showroom_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
     wb = openpyxl.load_workbook(file_name) if os.path.exists(file_name) else openpyxl.Workbook()
     if "Sheet" in wb.sheetnames: wb.remove(wb["Sheet"])
@@ -136,10 +155,12 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
     ws.append(hang_du_lieu)
     wb.save(file_name)
 
+    # Đẩy dữ liệu Realtime lên Google Sheets
     sheet = connect_gsheet()
     if sheet:
         try:
-            worksheet = sheet.worksheet("Khách Đến" if loai == "KHÁCH ĐẾN" else "Khách Về")
+            ws_target = "Khách Đến" if loai == "KHÁCH ĐẾN" else "Khách Về"
+            worksheet = sheet.worksheet(ws_target)
             worksheet.append_row(hang_du_lieu)
         except Exception as e:
             st.warning(f"Lỗi đồng bộ Realtime: {e}")
@@ -159,9 +180,9 @@ def cap_nhat_nhan_vien(ma_nv, mat_khau_moi=None, trang_thai_moi=None, reset_devi
         if str(row.get("Mã NV", "")).strip() == ma_nv.strip():
             cols = list(row.keys())
             if mat_khau_moi and "Mật Khẩu" in cols:
-                ws.update_cell(idx, cols.index("Mật Khẩu") + 1, mat_khau_moi.strip())
+                ws.update_cell(idx, cols.index("Mật Khẩu") + 1, str(mat_khau_moi).strip())
             if trang_thai_moi and "Trạng Thái" in cols:
-                ws.update_cell(idx, cols.index("Trạng Thái") + 1, trang_thai_moi.strip())
+                ws.update_cell(idx, cols.index("Trạng Thái") + 1, str(trang_thai_moi).strip())
             if reset_device and "Device_ID" in cols:
                 ws.update_cell(idx, cols.index("Device_ID") + 1, "")
             return True, f"Đã cập nhật thành công cho Mã NV: {ma_nv}"
