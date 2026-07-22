@@ -66,6 +66,16 @@ device_signature = st_javascript("navigator.userAgent")
 def set_page(page_name):
     st.session_state.page = page_name
 
+# Dữ liệu xe VinFast dùng chung
+data_vinfast = {
+    "Dòng xe": ["VF 2", "VF 3", "VF 5 Plus", "VF 6", "VF 7", "VF 8", "VF 9"],
+    "Giá niêm yết (VND)": [188000000, 302000000, 529000000, 689000000, 789000000, 1069000000, 1499000000],
+    "Quãng đường tối đa": ["~120 - 150 km", "~210 km", "~326 km", "~399 km", "~450 km", "~471 km", "~626 km"]
+}
+df_vinfast = pd.DataFrame(data_vinfast)
+cac_dong_xe = sorted(list(set(data_vinfast["Dòng xe"])))
+cac_mau_xe = ["Trắng", "Đen", "Xám", "Bạc", "Xanh", "Đỏ"]
+
 # ==============================================================================
 # 3. HÀM XÁC THỰC DỮ LIỆU & BẢO MẬT THIẾT BỊ
 # ==============================================================================
@@ -83,14 +93,17 @@ def verify_login(role, user_code, password, device_id):
         return False, "Chưa kết nối được với Server Google Sheets!"
     
     ws_name = "QuanLy" if role == "VFHTP" else "NhanVien"
-    ws = sheet.worksheet(ws_name)
-    records = ws.get_all_records()
+    try:
+        ws = sheet.worksheet(ws_name)
+        records = ws.get_all_records()
+    except Exception as e:
+        return False, f"Lỗi đọc dữ liệu: {e}"
     
     col_code = "Mã VFHTP" if role == "VFHTP" else "Mã NV"
     
     for idx, row in enumerate(records, start=2):
-        if str(row[col_code]).strip() == user_code.strip():
-            if str(row["Mật Khẩu"]).strip() != password.strip():
+        if str(row.get(col_code, "")).strip() == user_code.strip():
+            if str(row.get("Mật Khẩu", "")).strip() != password.strip():
                 return False, "Mật khẩu không chính xác!"
             
             if role == "NHAN_VIEN" and str(row.get("Trạng Thái", "")).strip() != "Đã duyệt":
@@ -101,8 +114,11 @@ def verify_login(role, user_code, password, device_id):
                 return False, "⛔ Tài khoản này đã đăng nhập trên thiết bị khác! Mỗi tài khoản chỉ dùng trên 1 thiết bị."
             
             # Cập nhật Device ID nếu chưa có
-            if not current_device:
-                ws.update_cell(idx, list(row.keys()).index("Device_ID") + 1, str(device_id))
+            if not current_device and device_id:
+                cols = list(row.keys())
+                if "Device_ID" in cols:
+                    col_idx = cols.index("Device_ID") + 1
+                    ws.update_cell(idx, col_idx, str(device_id))
                 
             return True, "Thành công"
             
@@ -128,15 +144,29 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
         except Exception as e:
             st.warning(f"Lỗi đồng bộ Realtime: {e}")
 
-# Dữ liệu xe VinFast
-data_vinfast = {
-    "Dòng xe": ["VF 2", "VF 3", "VF 5 Plus", "VF 6", "VF 7", "VF 8", "VF 9"],
-    "Giá niêm yết (VND)": [188000000, 302000000, 529000000, 689000000, 789000000, 1069000000, 1499000000],
-    "Quãng đường tối đa": ["~120 - 150 km", "~210 km", "~326 km", "~399 km", "~450 km", "~471 km", "~626 km"]
-}
-df_vinfast = pd.DataFrame(data_vinfast)
-cac_dong_xe = sorted(list(set(data_vinfast["Dòng xe"])))
-cac_mau_xe = ["Trắng", "Đen", "Xám", "Bạc", "Xanh", "Đỏ"]
+def cap_nhat_nhan_vien(ma_nv, mat_khau_moi=None, trang_thai_moi=None, reset_device=False):
+    sheet = connect_gsheet()
+    if not sheet:
+        return False, "Chưa kết nối được với Google Sheets!"
+    
+    try:
+        ws = sheet.worksheet("NhanVien")
+        records = ws.get_all_records()
+    except Exception as e:
+        return False, f"Lỗi đọc sheet NhanVien: {e}"
+    
+    for idx, row in enumerate(records, start=2):
+        if str(row.get("Mã NV", "")).strip() == ma_nv.strip():
+            cols = list(row.keys())
+            if mat_khau_moi and "Mật Khẩu" in cols:
+                ws.update_cell(idx, cols.index("Mật Khẩu") + 1, mat_khau_moi.strip())
+            if trang_thai_moi and "Trạng Thái" in cols:
+                ws.update_cell(idx, cols.index("Trạng Thái") + 1, trang_thai_moi.strip())
+            if reset_device and "Device_ID" in cols:
+                ws.update_cell(idx, cols.index("Device_ID") + 1, "")
+            return True, f"Đã cập nhật thành công cho Mã NV: {ma_nv}"
+            
+    return False, f"Không tìm thấy Mã NV: {ma_nv}"
 
 # ==============================================================================
 # 4. MÀN HÌNH ĐĂNG NHẬP
@@ -156,7 +186,7 @@ if st.session_state.page == "login":
     with st.form("form_login"):
         if loai_tk == "Quản lý (Mã VFHTP)":
             user_code = st.text_input("Nhập Mã VFHTP: *")
-            password = st.text_input("Nhập Mật khẩu (1): *", type="password")
+            password = st.text_input("Nhập Mật khẩu: *", type="password")
         else:
             user_code = st.text_input("Nhập Mã Nhân Viên (NV): *")
             password = st.text_input("Nhập Mật khẩu Nhân viên: *", type="password")
@@ -175,7 +205,7 @@ if st.session_state.page == "login":
                     set_page("home")
                     st.rerun()
                 else:
-                    st.error(f"❌ Dang nhập thất bại: {msg}")
+                    st.error(f"❌ Đăng nhập thất bại: {msg}")
 
 # ==============================================================================
 # 5. MÀN HÌNH CHÍNH (HOME)
@@ -229,7 +259,6 @@ elif st.session_state.page == "khach_den":
     st.write("---")
 
     with st.form("form_khach_den", clear_on_submit=True):
-        # Tự động gán Mã NV nếu tài khoản đăng nhập là Nhân viên
         if st.session_state.user_role == "NHAN_VIEN":
             st.info(f"👤 Mã nhân viên ghi nhận: **{st.session_state.user_id}**")
             ma_nv = st.session_state.user_id
@@ -315,7 +344,22 @@ elif st.session_state.page == "khach_ve":
         st.rerun()
 
 # ==============================================================================
-# 8. MÀN HÌNH BÁO CÁO REALTIME (ĐẶC QUYỀN MÃ VFHTP)
+# 8. MÀN HÌNH TRA CỨU BẢNG GIÁ / THÔNG SỐ XE
+# ==============================================================================
+elif st.session_state.page == "tra_cuu":
+    st.markdown('<div class="sub-title">📋 TRA CỨU BẢNG GIÁ & THÔNG SỐ XE VINFAST</div>', unsafe_allow_html=True)
+    
+    df_display = df_vinfast.copy()
+    df_display["Giá niêm yết (VND)"] = df_display["Giá niêm yết (VND)"].apply(lambda x: f"{x:,.0f} VNĐ")
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    
+    st.write("---")
+    if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
+        set_page("home")
+        st.rerun()
+
+# ==============================================================================
+# 9. MÀN HÌNH BÁO CÁO REALTIME (ĐẶC QUYỀN MÃ VFHTP)
 # ==============================================================================
 elif st.session_state.page == "bao_cao":
     if st.session_state.user_role != "VFHTP":
@@ -326,18 +370,53 @@ elif st.session_state.page == "bao_cao":
     else:
         st.markdown('<div class="sub-title">📈 BÁO CÁO REALTIME (ĐẶC QUYỀN MÃ VFHTP)</div>', unsafe_allow_html=True)
         
-        tab1, tab2 = st.tabs(["📥 Danh sách Khách Đến", "📤 Danh sách Khách Về"])
+        tab1, tab2, tab3 = st.tabs(["📥 Khách Đến", "📤 Khách Về", "⚙️ Quản lý Nhân viên"])
         sheet = connect_gsheet()
         
         if sheet:
             with tab1:
-                df_den = pd.DataFrame(sheet.worksheet("Khách Đến").get_all_records())
-                st.write(f"**Tổng số lượt khách đến:** {len(df_den)}")
-                st.dataframe(df_den, use_container_width=True, hide_index=True)
+                try:
+                    df_den = pd.DataFrame(sheet.worksheet("Khách Đến").get_all_records())
+                    st.write(f"**Tổng số lượt khách đến:** {len(df_den)}")
+                    st.dataframe(df_den, use_container_width=True, hide_index=True)
+                except Exception as e:
+                    st.error(f"Lỗi tải danh sách Khách Đến: {e}")
             with tab2:
-                df_ve = pd.DataFrame(sheet.worksheet("Khách Về").get_all_records())
-                st.write(f"**Tổng số lượt khách về:** {len(df_ve)}")
-                st.dataframe(df_ve, use_container_width=True, hide_index=True)
+                try:
+                    df_ve = pd.DataFrame(sheet.worksheet("Khách Về").get_all_records())
+                    st.write(f"**Tổng số lượt khách về:** {len(df_ve)}")
+                    st.dataframe(df_ve, use_container_width=True, hide_index=True)
+                except Exception as e:
+                    st.error(f"Lỗi tải danh sách Khách Về: {e}")
+            with tab3:
+                st.markdown("### Quản lý & Duyệt Tài Khoản Nhân Viên")
+                try:
+                    df_nv = pd.DataFrame(sheet.worksheet("NhanVien").get_all_records())
+                    st.dataframe(df_nv, use_container_width=True, hide_index=True)
+                    
+                    st.write("---")
+                    st.markdown("**Cập nhật thông tin / Reset thiết bị Nhân viên:**")
+                    with st.form("form_update_nv"):
+                        ma_nv_up = st.text_input("Mã NV cần xử lý:")
+                        trang_thai_up = st.selectbox("Cập nhật Trạng thái:", ["-- Giữ nguyên --", "Đã duyệt", "Chờ duyệt", "Tạm khóa"])
+                        mk_moi = st.text_input("Mật khẩu mới (bỏ trống nếu không đổi):", type="password")
+                        reset_dev = st.checkbox("Mở khóa thiết bị (Reset Device ID)")
+                        
+                        btn_up = st.form_submit_button("🔄 CẬP NHẬT TÀI KHOẢN", use_container_width=True)
+                        if btn_up:
+                            if not ma_nv_up.strip():
+                                st.error("Vui lòng nhập Mã NV!")
+                            else:
+                                tt = None if trang_thai_up == "-- Giữ nguyên --" else trang_thai_up
+                                mk = None if not mk_moi.strip() else mk_moi
+                                res, msg = cap_nhat_nhan_vien(ma_nv_up, mat_khau_moi=mk, trang_thai_moi=tt, reset_device=reset_dev)
+                                if res:
+                                    st.success(f"✅ {msg}")
+                                    st.rerun()
+                                else:
+                                    st.error(f"❌ {msg}")
+                except Exception as e:
+                    st.error(f"Lỗi tải trang Quản lý Nhân viên: {e}")
         else:
             st.error("Chưa thể kết nối tới Google Sheets.")
 
@@ -345,26 +424,3 @@ elif st.session_state.page == "bao_cao":
         if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
             set_page("home")
             st.rerun()
-# ==============================================================================
-# HÀM CẬP NHẬT TRẠNG THÁI / MẬT KHẨU NHÂN VIÊN (DÀNH CHO VFHTP)
-# ==============================================================================
-def cap_nhat_nhan_vien(ma_nv, mat_khau_moi=None, trang_thai_moi=None, reset_device=False):
-    sheet = connect_gsheet()
-    if not sheet:
-        return False, "Chưa kết nối được với Google Sheets!"
-    
-    ws = sheet.worksheet("NhanVien")
-    records = ws.get_all_records()
-    
-    for idx, row in enumerate(records, start=2): # Bắt đầu từ dòng 2 (sau tiêu đề)
-        if str(row.get("Mã NV", "")).strip() == ma_nv.strip():
-            if mat_khau_moi:
-                ws.update_cell(idx, list(row.keys()).index("Mật Khẩu") + 1, mat_khau_moi.strip())
-            if trang_thai_moi:
-                ws.update_cell(idx, list(row.keys()).index("Trạng Thái") + 1, trang_thai_moi.strip())
-            if reset_device:
-                ws.update_cell(idx, list(row.keys()).index("Device_ID") + 1, "")
-            return True, f"Đã cập nhật thành công cho Mã NV: {ma_nv}"
-            
-    return False, f"Không tìm thấy Mã NV: {ma_nv}"
-
