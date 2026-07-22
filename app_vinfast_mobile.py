@@ -167,7 +167,7 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
         wb.create_sheet("Khách Đến").append(["Thời gian", "Loại khách", "Mã NV", "Họ tên KH", "Dòng xe", "Mục đích sử dụng", "Màu sắc", "Nhu cầu vay", "SDT"])
     if "Khách Về" not in wb.sheetnames:
         wb.create_sheet("Khách Về").append([
-        "Thời gian", "Trạng thái cọc", "Mã NV", "Họ tên", "SDT", "CCCD", "Xe đã xem", "Tiền cọc"
+        "Thời gian", "Trạng thái cọc", "Mã NV", "Họ tên", "SDT", "CCCD", "Xe đã xem", "Tiền cọc"])
 
     ws = wb["Khách Đến" if loai == "KHÁCH ĐẾN" else "Khách Về"]
     ws.append(hang_du_lieu)
