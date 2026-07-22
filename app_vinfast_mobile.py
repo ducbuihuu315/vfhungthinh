@@ -194,7 +194,6 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
 # MÀN HÌNH CHÍNH (HOME)
 # ------------------------------------------------------------------------------
 if st.session_state.page == "home":
-    # Tiêu đề kết nối trực tiếp đến https://vinfasthungthinhphat.vn
     st.markdown("""
         <div class="main-title">
             🚘 <a href="https://vinfasthungthinhphat.vn" target="_blank">VINFAST HƯNG THỊNH PHÁT</a><br>
@@ -220,6 +219,10 @@ if st.session_state.page == "home":
         set_page("tra_cuu")
         st.rerun()
 
+    if st.button("4. 📈 BÁO CÁO & THỐNG KÊ REALTIME", use_container_width=True):
+        set_page("bao_cao")
+        st.rerun()
+
 # ------------------------------------------------------------------------------
 # 1. KHÂU KHÁCH ĐẾN SHOWROOM
 # ------------------------------------------------------------------------------
@@ -229,10 +232,8 @@ elif st.session_state.page == "khach_den":
     co_hen = st.radio("Khách hàng đã có hẹn trước chưa?", ["Chưa có hẹn (Vãng lai)", "Đã có hẹn trước"], horizontal=True)
     is_hen = (co_hen == "Đã có hẹn trước")
 
-    # Đặt chọn dòng xe ra NGOÀI Form để phản hồi lập tức khi người dùng click
     xe_chon = st.selectbox("Dòng xe bạn quan tâm: *", cac_dong_xe)
 
-    # Hiển thị trực tiếp bảng thông số so sánh chi tiết ngay bên dưới
     st.markdown(f"**📊 Chi tiết thông số so sánh dòng xe {xe_chon}:**")
     df_sub = df_vinfast[df_vinfast["Dòng xe"] == xe_chon]
     st.dataframe(
@@ -242,7 +243,6 @@ elif st.session_state.page == "khach_den":
     )
     st.write("---")
 
-    # Form nhập liệu các thông tin khách hàng
     with st.form("form_khach_den", clear_on_submit=True):
         ma_nv = ""
         if is_hen:
@@ -365,6 +365,63 @@ elif st.session_state.page == "tra_cuu":
     st.write(f"**⚙️ Hệ thống dẫn động:** {row_info['Hệ thống dẫn động']}")
     st.write(f"**🛋️ Loại trần xe:** {row_info['Loại trần xe']}")
     st.write(f"**🌟 Tính năng nổi bật:** {row_info['Tính năng nổi bật']}")
+
+    st.write("---")
+    if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
+        set_page("home")
+        st.rerun()
+
+# ------------------------------------------------------------------------------
+# 4. MÀN HÌNH BÁO CÁO & THỐNG KÊ REALTIME
+# ------------------------------------------------------------------------------
+elif st.session_state.page == "bao_cao":
+    st.markdown('<div class="sub-title">📈 BÁO CÁO DỮ LIỆU SHOWROOM REALTIME</div>', unsafe_allow_html=True)
+    
+    if st.button("🔄 LÀM MỚI DỮ LIỆU", use_container_width=True):
+        st.rerun()
+
+    tab1, tab2 = st.tabs(["📥 Danh sách Khách Đến", "📤 Danh sách Khách Về"])
+
+    # Lấy dữ liệu Realtime từ Google Sheets
+    if "gcp_service_account" in st.secrets and HAS_GSPREAD:
+        try:
+            scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
+            creds = Credentials.from_service_account_info(st.secrets["gcp_service_account"], scopes=scope)
+            client = gspread.authorize(creds)
+            sheet = client.open("ThongKe_Vinfast_Showroom")
+            
+            with tab1:
+                data_den = sheet.worksheet("Khách Đến").get_all_records()
+                df_den = pd.DataFrame(data_den)
+                st.write(f"**Tổng số lượt khách đến:** {len(df_den)}")
+                st.dataframe(df_den, use_container_width=True, hide_index=True)
+
+            with tab2:
+                data_ve = sheet.worksheet("Khách Về").get_all_records()
+                df_ve = pd.DataFrame(data_ve)
+                st.write(f"**Tổng số lượt khách về:** {len(df_ve)}")
+                st.dataframe(df_ve, use_container_width=True, hide_index=True)
+                
+        except Exception as e:
+            st.error(f"⚠️ Chưa kết nối được Server dữ liệu: {e}")
+    else:
+        st.info("ℹ️ Đang xem báo cáo từ file lưu cục bộ trên máy này (Cần kết nối Google Sheets Secrets để xem chung tất cả các máy).")
+        file_today = f"ThongKe_Showroom_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
+        if os.path.exists(file_today):
+            with tab1:
+                try:
+                    df_local_den = pd.read_excel(file_today, sheet_name="Khách Đến")
+                    st.dataframe(df_local_den, use_container_width=True, hide_index=True)
+                except Exception:
+                    st.write("Chưa có dữ liệu khách đến hôm nay.")
+            with tab2:
+                try:
+                    df_local_ve = pd.read_excel(file_today, sheet_name="Khách Về")
+                    st.dataframe(df_local_ve, use_container_width=True, hide_index=True)
+                except Exception:
+                    st.write("Chưa có dữ liệu khách về hôm nay.")
+        else:
+            st.warning("Chưa có tệp dữ liệu nào được khởi tạo hôm nay.")
 
     st.write("---")
     if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
