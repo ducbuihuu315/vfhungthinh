@@ -18,7 +18,7 @@ st.set_page_config(
 st.markdown("""
     <style>
     .stApp {
-        background-color: #1a1a1a;
+        background-color: #121212;
         color: #ffffff;
     }
     .main-title {
@@ -27,9 +27,9 @@ st.markdown("""
         font-weight: bold;
         font-size: 22px;
         margin-bottom: 20px;
-        background-color: #000000;
+        background-color: #1e1e1e;
         padding: 15px;
-        border-radius: 10px;
+        border-radius: 12px;
         border: 1px solid #333333;
     }
     .sub-title {
@@ -39,17 +39,33 @@ st.markdown("""
         text-align: center;
         margin-bottom: 15px;
     }
+    
+    /* ========================================================================== */
+    /* CẤU HÌNH NÚT BẤM NỔI BẬT DỄ NHÌN TRÊN MÀN HÌNH ĐIỆN THOẠI                  */
+    /* ========================================================================== */
     div.stButton > button {
-        width: 100%;
-        height: 50px;
-        font-weight: bold;
-        font-size: 16px;
-        border-radius: 8px;
-        margin-bottom: 10px;
+        width: 100% !important;
+        height: 55px !important;
+        font-weight: bold !important;
+        font-size: 16px !important;
+        border-radius: 12px !important;
+        margin-bottom: 12px !important;
+        background: linear-gradient(135deg, #1e293b, #0f172a) !important; /* Nền dải màu hiện đại */
+        color: #ffffff !important; /* Mẫu chữ màu trắng sáng */
+        border: 2px solid #00d26a !important; /* Viền xanh dạ quang siêu nổi */
+        box-shadow: 0px 4px 10px rgba(0, 210, 106, 0.2) !important; /* Hiệu ứng phát sáng nhẹ */
+        transition: all 0.2s ease-in-out !important;
+    }
+
+    /* Hiệu ứng khi nhấn chọn hoặc di chuột vào nút */
+    div.stButton > button:hover, div.stButton > button:active, div.stButton > button:focus {
+        background: #00d26a !important;
+        color: #000000 !important;
+        border-color: #00d26a !important;
+        box-shadow: 0px 6px 15px rgba(0, 210, 106, 0.5) !important;
     }
     </style>
 """, unsafe_allow_html=True)
-
 # ==============================================================================
 # 2. KHỞI TẠO DỮ LIỆU XE VINFAST
 # ==============================================================================
@@ -148,35 +164,7 @@ def ghi_excel(loai, hang_du_lieu):
 # 4. CÁC MÀN HÌNH GIAO DIỆN STREAMLIT
 # ==============================================================================
 
-# ------------------------------------------------------------------------------
-# MÀN HÌNH CHÍNH (HOME)
-# ------------------------------------------------------------------------------
-if st.session_state.page == "home":
-    st.markdown("""
-        <div class="main-title">
-            🚘 VINFAST HƯNG THỊNH PHÁT<br>
-            <span style="font-size: 14px; font-weight: normal; color: #00d26a;">HÀNH TRÌNH XANH - TƯƠNG LAI XANH</span>
-        </div>
-    """, unsafe_allow_html=True)
-
-    # Hiển thị ảnh nền trang chủ nếu có
     anh_nen = os.path.join(THU_MUC_ANH, "anh_nen_tong_the.jpg")
-    if os.path.exists(anh_nen):
-        st.image(anh_nen, use_container_width=True)
-
-    st.write(" ")
-    
-    if st.button("1. 🚗 KHÁCH ĐẾN SHOWROOM", use_container_width=True, type="primary"):
-        set_page("khach_den")
-        st.rerun()
-
-    if st.button("2. 🚶 KHÁCH RỜI SHOWROOM", use_container_width=True):
-        set_page("khach_ve")
-        st.rerun()
-
-    if st.button("3. 📋 TRA CỨU BẢNG GIÁ / THÔNG SỐ XE", use_container_width=True):
-        set_page("tra_cuu")
-        st.rerun()
 
 # ------------------------------------------------------------------------------
 # 1. KHÂU KHÁCH ĐẾN SHOWROOM
