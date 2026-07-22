@@ -371,7 +371,7 @@ def cap_nhat_nhan_vien(ma_nv, mat_khau_moi=None, trang_thai_moi=None, reset_devi
 # ==============================================================================
 # MÀN HÌNH QUẢN LÝ TÀI KHOẢN NHÂN VIÊN (CHỈ DÀNH CHO MÃ VFHTP)
 # ==============================================================================
-elif st.session_state.page == "quan_ly_nv":
+    elif st.session_state.page == "quan_ly_nv":
     if st.session_state.user_role != "VFHTP":
         st.error("⛔ Bạn không có quyền truy cập chức năng này!")
     else:
