@@ -3,7 +3,6 @@ import openpyxl
 import pandas as pd
 import streamlit as st
 from datetime import datetime
-from streamlit_javascript import st_javascript
 
 # Tích hợp Google Sheets Realtime
 try:
@@ -51,17 +50,10 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. KHỞI TẠO SESSION & LẤY ĐỊNH DANH THIẾT BỊ
+# 2. KHỞI TẠO SESSION & DỮ LIỆU DÙNG CHUNG
 # ==============================================================================
-if "user_role" not in st.session_state:
-    st.session_state.user_role = None  # "VFHTP" hoặc "NHAN_VIEN"
-if "user_id" not in st.session_state:
-    st.session_state.user_id = ""
 if "page" not in st.session_state:
-    st.session_state.page = "login"
-
-# Lấy User Agent của thiết bị
-device_signature = st_javascript("navigator.userAgent")
+    st.session_state.page = "home"
 
 def set_page(page_name):
     st.session_state.page = page_name
@@ -77,7 +69,7 @@ cac_dong_xe = sorted(list(set(data_vinfast["Dòng xe"])))
 cac_mau_xe = ["Trắng", "Đen", "Xám", "Bạc", "Xanh", "Đỏ"]
 
 # ==============================================================================
-# 3. HÀM XÁC THỰC DỮ LIỆU & BẢO MẬT THIẾT BỊ (ĐÃ SỬA CHUẨN XÁC)
+# 3. HÀM KẾT NỐI VÀ LƯU DỮ LIỆU
 # ==============================================================================
 @st.cache_resource(ttl=600)
 def connect_gsheet():
@@ -102,67 +94,8 @@ def connect_gsheet():
             return None
     return None
 
-def verify_login(role, user_code, password, device_id):
-    sheet = connect_gsheet()
-    if not sheet:
-        return False, "Chưa kết nối được với Server Google Sheets! Vui lòng kiểm tra st.secrets."
-    
-    ws_name = "QuanLy" if role == "VFHTP" else "NhanVien"
-    try:
-        ws = sheet.worksheet(ws_name)
-        rows = ws.get_all_values() # Đọc toàn bộ ô dưới dạng mảng 2 chiều
-    except Exception as e:
-        return False, f"Lỗi đọc dữ liệu sheet {ws_name}: {e}"
-    
-    if len(rows) < 2:
-        return False, f"Sheet {ws_name} chưa có dữ liệu tài khoản!"
-
-    headers = [str(h).strip() for h in rows[0]]
-    
-    # Tìm chỉ số các cột
-    col_code_idx = 0 # Cột A mặc định là Mã đăng nhập
-    col_pass_idx = headers.index("Mật Khẩu") if "Mật Khẩu" in headers else 1
-    col_status_idx = headers.index("Trạng Thái") if "Trạng Thái" in headers else -1
-    col_device_idx = headers.index("Device_ID") if "Device_ID" in headers else -1
-
-    dev_str = str(device_id).strip() if device_id and device_id != 0 else ""
-
-    for row_idx, row in enumerate(rows[1:], start=2):
-        if not row or len(row) == 0:
-            continue
-            
-        code_val = str(row[col_code_idx]).strip() if len(row) > col_code_idx else ""
-        pass_val = str(row[col_pass_idx]).strip() if len(row) > col_pass_idx else ""
-        
-        if code_val == user_code.strip():
-            if pass_val != str(password).strip():
-                return False, "Mật khẩu không chính xác!"
-            
-            # Kiểm tra trạng thái cho Nhân viên
-            if role == "NHAN_VIEN" and col_status_idx != -1 and len(row) > col_status_idx:
-                status_val = str(row[col_status_idx]).strip()
-                if status_val != "Đã duyệt":
-                    return False, "Tài khoản Nhân viên chưa được cấp duyệt!"
-            
-            # Kiểm tra thiết bị
-            if col_device_idx != -1 and len(row) > col_device_idx:
-                current_device = str(row[col_device_idx]).strip()
-                
-                if current_device and dev_str and current_device != dev_str:
-                    return False, "⛔ Tài khoản này đã đăng nhập trên thiết bị khác!"
-                
-                # Cập nhật Device ID nếu chưa ghi nhận
-                if not current_device and dev_str:
-                    try:
-                        ws.update_cell(row_idx, col_device_idx + 1, dev_str)
-                    except Exception:
-                        pass
-                
-            return True, "Thành công"
-            
-    return False, f"Không tìm thấy Mã '{user_code}' trên hệ thống!"
-
 def luu_du_lieu_realtime(loai, hang_du_lieu):
+    # 1. Lưu file Excel cục bộ dự phòng
     try:
         file_name = f"ThongKe_Showroom_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
         if os.path.exists(file_name):
@@ -170,7 +103,7 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
         else:
             wb = openpyxl.Workbook()
             if "Sheet" in wb.sheetnames:
-                wb.remove(wb["Sheet"])
+                wb.remove("Sheet")
         
         ws_title = "Khách Đến" if loai == "KHÁCH ĐẾN" else "Khách Về"
         if ws_title not in wb.sheetnames:
@@ -187,6 +120,7 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
     except Exception as e:
         print(f"Lỗi ghi Excel cục bộ: {e}")
 
+    # 2. Đẩy dữ liệu Realtime lên Google Sheets
     sheet = connect_gsheet()
     if sheet:
         try:
@@ -196,81 +130,14 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
         except Exception as e:
             st.warning(f"Lỗi đồng bộ Realtime: {e}")
 
-def cap_nhat_nhan_vien(ma_nv, mat_khau_moi=None, trang_thai_moi=None, reset_device=False):
-    sheet = connect_gsheet()
-    if not sheet:
-        return False, "Chưa kết nối được với Google Sheets!"
-    
-    try:
-        ws = sheet.worksheet("NhanVien")
-        rows = ws.get_all_values()
-    except Exception as e:
-        return False, f"Lỗi đọc sheet NhanVien: {e}"
-    
-    if len(rows) < 2:
-        return False, "Danh sách Nhân viên rỗng!"
-
-    headers = [str(h).strip() for h in rows[0]]
-    
-    for idx, row in enumerate(rows[1:], start=2):
-        if row and str(row[0]).strip() == ma_nv.strip():
-            if mat_khau_moi and "Mật Khẩu" in headers:
-                ws.update_cell(idx, headers.index("Mật Khẩu") + 1, str(mat_khau_moi).strip())
-            if trang_thai_moi and "Trạng Thái" in headers:
-                ws.update_cell(idx, headers.index("Trạng Thái") + 1, str(trang_thai_moi).strip())
-            if reset_device and "Device_ID" in headers:
-                ws.update_cell(idx, headers.index("Device_ID") + 1, "")
-            return True, f"Đã cập nhật thành công cho Mã NV: {ma_nv}"
-            
-    return False, f"Không tìm thấy Mã NV: {ma_nv}"
-
 # ==============================================================================
-# 4. MÀN HÌNH ĐĂNG NHẬP
+# 4. MÀN HÌNH CHÍNH (HOME)
 # ==============================================================================
-if st.session_state.page == "login":
+if st.session_state.page == "home":
     st.markdown("""
         <div class="main-title">
             🚘 <a href="https://vinfasthungthinhphat.vn" target="_blank">VINFAST HƯNG THỊNH PHÁT</a><br>
-            <span style="font-size: 14px; font-weight: normal; color: #00d26a;">HỆ THỐNG QUẢN LÝ SHOWROOM</span>
-        </div>
-    """, unsafe_allow_html=True)
-    
-    st.markdown('<div class="sub-title">🔐 ĐĂNG NHẬP HỆ THỐNG</div>', unsafe_allow_html=True)
-    
-    loai_tk = st.radio("Cấp độ đăng nhập:", ["Quản lý (Mã VFHTP)", "Nhân viên (Mã NV)"], horizontal=True)
-    
-    with st.form("form_login"):
-        if loai_tk == "Quản lý (Mã VFHTP)":
-            user_code = st.text_input("Nhập Mã VFHTP: *")
-            password = st.text_input("Nhập Mật khẩu: *", type="password")
-        else:
-            user_code = st.text_input("Nhập Mã Nhân Viên (NV): *")
-            password = st.text_input("Nhập Mật khẩu Nhân viên: *", type="password")
-            
-        btn_submit = st.form_submit_button("🔓 ĐĂNG NHẬP", use_container_width=True, type="primary")
-        
-        if btn_submit:
-            role = "VFHTP" if loai_tk == "Quản lý (Mã VFHTP)" else "NHAN_VIEN"
-            if not user_code.strip() or not password.strip():
-                st.error("⚠️ Vui lòng điền đầy đủ Mã và Mật khẩu!")
-            else:
-                success, msg = verify_login(role, user_code, password, device_signature)
-                if success:
-                    st.session_state.user_role = role
-                    st.session_state.user_id = user_code.strip()
-                    set_page("home")
-                    st.rerun()
-                else:
-                    st.error(f"❌ Đăng nhập thất bại: {msg}")
-
-# ==============================================================================
-# 5. MÀN HÌNH CHÍNH (HOME)
-# ==============================================================================
-elif st.session_state.page == "home":
-    st.markdown(f"""
-        <div class="main-title">
-            🚘 <a href="https://vinfasthungthinhphat.vn" target="_blank">VINFAST HƯNG THỊNH PHÁT</a><br>
-            <span style="font-size: 14px; color: #00d26a;">Xin chào: {st.session_state.user_id} ({'Quản lý' if st.session_state.user_role == 'VFHTP' else 'Nhân viên'})</span>
+            <span style="font-size: 14px; color: #00d26a;">HỆ THỐNG QUẢN LÝ SHOWROOM</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -286,19 +153,8 @@ elif st.session_state.page == "home":
         set_page("tra_cuu")
         st.rerun()
 
-    if st.session_state.user_role == "VFHTP":
-        if st.button("4. 📈 BÁO CÁO REALTIME (ĐẶC QUYỀN VFHTP)", use_container_width=True):
-            set_page("bao_cao")
-            st.rerun()
-            
-    if st.button("🚪 ĐĂNG XUẤT", use_container_width=True):
-        st.session_state.user_role = None
-        st.session_state.user_id = ""
-        set_page("login")
-        st.rerun()
-
 # ==============================================================================
-# 6. KHÂU KHÁCH ĐẾN SHOWROOM
+# 5. KHÂU KHÁCH ĐẾN SHOWROOM
 # ==============================================================================
 elif st.session_state.page == "khach_den":
     st.markdown('<div class="sub-title">📥 THÔNG TIN KHÁCH ĐẾN SHOWROOM</div>', unsafe_allow_html=True)
@@ -314,12 +170,7 @@ elif st.session_state.page == "khach_den":
     st.write("---")
 
     with st.form("form_khach_den", clear_on_submit=True):
-        if st.session_state.user_role == "NHAN_VIEN":
-            st.info(f"👤 Mã nhân viên ghi nhận: **{st.session_state.user_id}**")
-            ma_nv = st.session_state.user_id
-        else:
-            ma_nv = st.text_input("Mã nhân viên tư vấn/hẹn trước: *", value=st.session_state.user_id if is_hen else "")
-            
+        ma_nv = st.text_input("Mã nhân viên tư vấn/hẹn trước: *")
         ho_ten = st.text_input("Họ và tên khách hàng: *")
         muc_dich = st.selectbox("Mục đích sử dụng xe: *", ["Chạy gia đình", "Chạy dịch vụ"])
         phan_khuc = st.text_input("Phân khúc xe yêu cầu: *", placeholder="Ví dụ: SUV hạng A, C...")
@@ -350,7 +201,7 @@ elif st.session_state.page == "khach_den":
         st.rerun()
 
 # ==============================================================================
-# 7. KHÂU KHÁCH RỜI SHOWROOM
+# 6. KHÂU KHÁCH RỜI SHOWROOM
 # ==============================================================================
 elif st.session_state.page == "khach_ve":
     st.markdown('<div class="sub-title">📤 THÔNG TIN KHÁCH RỜI SHOWROOM</div>', unsafe_allow_html=True)
@@ -367,12 +218,7 @@ elif st.session_state.page == "khach_ve":
     st.write("---")
 
     with st.form("form_khach_ve", clear_on_submit=True):
-        if st.session_state.user_role == "NHAN_VIEN":
-            st.info(f"👤 Mã nhân viên tư vấn: **{st.session_state.user_id}**")
-            ma_nv = st.session_state.user_id
-        else:
-            ma_nv = st.text_input("Mã NV tư vấn: *")
-            
+        ma_nv = st.text_input("Mã NV tư vấn: *")
         ho_ten = st.text_input("Họ tên khách hàng: *")
         sdt = st.text_input("Số điện thoại: *")
         cccd = st.text_input("Số CCCD: *")
@@ -399,7 +245,7 @@ elif st.session_state.page == "khach_ve":
         st.rerun()
 
 # ==============================================================================
-# 8. MÀN HÌNH TRA CỨU BẢNG GIÁ / THÔNG SỐ XE
+# 7. MÀN HÌNH TRA CỨU BẢNG GIÁ / THÔNG SỐ XE
 # ==============================================================================
 elif st.session_state.page == "tra_cuu":
     st.markdown('<div class="sub-title">📋 TRA CỨU BẢNG GIÁ & THÔNG SỐ XE VINFAST</div>', unsafe_allow_html=True)
@@ -412,70 +258,3 @@ elif st.session_state.page == "tra_cuu":
     if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
         set_page("home")
         st.rerun()
-
-# ==============================================================================
-# 9. MÀN HÌNH BÁO CÁO REALTIME (ĐẶC QUYỀN MÃ VFHTP)
-# ==============================================================================
-elif st.session_state.page == "bao_cao":
-    if st.session_state.user_role != "VFHTP":
-        st.error("⛔ Bạn không có quyền truy cập màn hình báo cáo!")
-        if st.button("🏠 QUAY LẠI", use_container_width=True):
-            set_page("home")
-            st.rerun()
-    else:
-        st.markdown('<div class="sub-title">📈 BÁO CÁO REALTIME (ĐẶC QUYỀN MÃ VFHTP)</div>', unsafe_allow_html=True)
-        
-        tab1, tab2, tab3 = st.tabs(["📥 Khách Đến", "📤 Khách Về", "⚙️ Quản lý Nhân viên"])
-        sheet = connect_gsheet()
-        
-        if sheet:
-            with tab1:
-                try:
-                    df_den = pd.DataFrame(sheet.worksheet("Khách Đến").get_all_records())
-                    st.write(f"**Tổng số lượt khách đến:** {len(df_den)}")
-                    st.dataframe(df_den, use_container_width=True, hide_index=True)
-                except Exception as e:
-                    st.error(f"Lỗi tải danh sách Khách Đến: {e}")
-            with tab2:
-                try:
-                    df_ve = pd.DataFrame(sheet.worksheet("Khách Về").get_all_records())
-                    st.write(f"**Tổng số lượt khách về:** {len(df_ve)}")
-                    st.dataframe(df_ve, use_container_width=True, hide_index=True)
-                except Exception as e:
-                    st.error(f"Lỗi tải danh sách Khách Về: {e}")
-            with tab3:
-                st.markdown("### Quản lý & Duyệt Tài Khoản Nhân Viên")
-                try:
-                    df_nv = pd.DataFrame(sheet.worksheet("NhanVien").get_all_records())
-                    st.dataframe(df_nv, use_container_width=True, hide_index=True)
-                    
-                    st.write("---")
-                    st.markdown("**Cập nhật thông tin / Reset thiết bị Nhân viên:**")
-                    with st.form("form_update_nv"):
-                        ma_nv_up = st.text_input("Mã NV cần xử lý:")
-                        trang_thai_up = st.selectbox("Cập nhật Trạng thái:", ["-- Giữ nguyên --", "Đã duyệt", "Chờ duyệt", "Tạm khóa"])
-                        mk_moi = st.text_input("Mật khẩu mới (bỏ trống nếu không đổi):", type="password")
-                        reset_dev = st.checkbox("Mở khóa thiết bị (Reset Device ID)")
-                        
-                        btn_up = st.form_submit_button("🔄 CẬP NHẬT TÀI KHOẢN", use_container_width=True)
-                        if btn_up:
-                            if not ma_nv_up.strip():
-                                st.error("Vui lòng nhập Mã NV!")
-                            else:
-                                tt = None if trang_thai_up == "-- Giữ nguyên --" else trang_thai_up
-                                mk = None if not mk_moi.strip() else mk_moi
-                                res, msg = cap_nhat_nhan_vien(ma_nv_up, mat_khau_moi=mk, trang_thai_moi=tt, reset_device=reset_dev)
-                                if res:
-                                    st.success(f"✅ {msg}")
-                                    st.rerun()
-                                else:
-                                    st.error(f"❌ {msg}")
-                except Exception as e:
-                    st.error(f"Lỗi tải trang Quản lý Nhân viên: {e}")
-        else:
-            st.error("Chưa thể kết nối tới Google Sheets.")
-
-        st.write("---")
-        if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
-            set_page("home")
-            st.rerun()
