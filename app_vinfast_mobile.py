@@ -66,6 +66,7 @@ st.markdown("""
     }
     </style>
 """, unsafe_allow_html=True)
+
 # ==============================================================================
 # 2. KHỞI TẠO DỮ LIỆU XE VINFAST
 # ==============================================================================
@@ -164,7 +165,35 @@ def ghi_excel(loai, hang_du_lieu):
 # 4. CÁC MÀN HÌNH GIAO DIỆN STREAMLIT
 # ==============================================================================
 
+# ------------------------------------------------------------------------------
+# MÀN HÌNH CHÍNH (HOME)
+# ------------------------------------------------------------------------------
+if st.session_state.page == "home":
+    st.markdown("""
+        <div class="main-title">
+            🚘 VINFAST HƯNG THỊNH PHÁT<br>
+            <span style="font-size: 14px; font-weight: normal; color: #00d26a;">HÀNH TRÌNH XANH - TƯƠNG LAI XANH</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Hiển thị ảnh nền trang chủ nếu có
     anh_nen = os.path.join(THU_MUC_ANH, "anh_nen_tong_the.jpg")
+    if os.path.exists(anh_nen):
+        st.image(anh_nen, use_container_width=True)
+
+    st.write(" ")
+    
+    if st.button("1. 🚗 KHÁCH ĐẾN SHOWROOM", use_container_width=True, type="primary"):
+        set_page("khach_den")
+        st.rerun()
+
+    if st.button("2. 🚶 KHÁCH RỜI SHOWROOM", use_container_width=True):
+        set_page("khach_ve")
+        st.rerun()
+
+    if st.button("3. 📋 TRA CỨU BẢNG GIÁ / THÔNG SỐ XE", use_container_width=True):
+        set_page("tra_cuu")
+        st.rerun()
 
 # ------------------------------------------------------------------------------
 # 1. KHÂU KHÁCH ĐẾN SHOWROOM
