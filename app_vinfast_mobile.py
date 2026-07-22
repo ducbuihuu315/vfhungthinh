@@ -22,8 +22,8 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Đường dẫn ảnh nền
-URL_ANH_NEN = "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/nen.jpg"
+# Đường dẫn ảnh nền (.jpg)
+URL_ANH_NEN = "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/anh_nen_tong_the.jpg"
 
 st.markdown(f"""
     <style>
@@ -81,26 +81,26 @@ if "page" not in st.session_state:
 def set_page(page_name):
     st.session_state.page = page_name
 
-# Đường dẫn/URL hình ảnh cho từng dòng xe
+# URL hình ảnh .jpg cho từng dòng xe
 HINH_ANH_XE = {
-    "VF 2": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf2.png",
-    "VF 3": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf3.png",
-    "VF 5 Plus": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf5.png",
-    "VF 6": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf6.png",
-    "VF 7": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf7.png",
-    "VF 8": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf8.png",
-    "VF 9": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/vf9.png"
+    "VF 2": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%202.jpg",
+    "VF 3": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%203.jpg",
+    "VF 5 Plus": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%205%20Plus.jpg",
+    "VF 6": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%206.jpg",
+    "VF 7": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%207.jpg",
+    "VF 8": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%208.jpg",
+    "VF 9": "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/hinhanh/VF%209.jpg"
 }
 
 def hien_thi_anh_xe(dong_xe):
-    """Hàm hiển thị hình ảnh xe"""
-    file_local_png = f"hinhanh/{dong_xe.lower().replace(' ', '')}.png"
-    file_local_jpg = f"hinhanh/{dong_xe.lower().replace(' ', '')}.jpg"
+    """Hàm hiển thị hình ảnh xe dạng .jpg"""
+    file_local_jpg_exact = f"hinhanh/{dong_xe}.jpg"
+    file_local_jpg_slug = f"hinhanh/{dong_xe.lower().replace(' ', '')}.jpg"
     
-    if os.path.exists(file_local_png):
-        st.image(file_local_png, caption=f"Xe VinFast {dong_xe}", use_container_width=True)
-    elif os.path.exists(file_local_jpg):
-        st.image(file_local_jpg, caption=f"Xe VinFast {dong_xe}", use_container_width=True)
+    if os.path.exists(file_local_jpg_exact):
+        st.image(file_local_jpg_exact, caption=f"Xe VinFast {dong_xe}", use_container_width=True)
+    elif os.path.exists(file_local_jpg_slug):
+        st.image(file_local_jpg_slug, caption=f"Xe VinFast {dong_xe}", use_container_width=True)
     elif dong_xe in HINH_ANH_XE:
         st.image(HINH_ANH_XE[dong_xe], caption=f"Xe VinFast {dong_xe}", use_container_width=True)
 
