@@ -51,7 +51,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. KHỞI TẠO SESSION & LẤY ĐỊNH DANH THIẾT BỊ (DEVICE ID)
+# 2. KHỞI TẠO SESSION & LẤY ĐỊNH DANH THIẾT BỊ
 # ==============================================================================
 if "user_role" not in st.session_state:
     st.session_state.user_role = None  # "VFHTP" hoặc "NHAN_VIEN"
@@ -60,7 +60,7 @@ if "user_id" not in st.session_state:
 if "page" not in st.session_state:
     st.session_state.page = "login"
 
-# Lấy thông tin User Agent của thiết bị
+# Lấy User Agent của thiết bị
 device_signature = st_javascript("navigator.userAgent")
 
 def set_page(page_name):
@@ -77,7 +77,7 @@ cac_dong_xe = sorted(list(set(data_vinfast["Dòng xe"])))
 cac_mau_xe = ["Trắng", "Đen", "Xám", "Bạc", "Xanh", "Đỏ"]
 
 # ==============================================================================
-# 3. HÀM XÁC THỰC DỮ LIỆU & BẢO MẬT THIẾT BỊ (ĐÃ TỐI ƯU)
+# 3. HÀM XÁC THỰC DỮ LIỆU & BẢO MẬT THIẾT BỊ (ĐÃ SỬA CHUẨN XÁC)
 # ==============================================================================
 @st.cache_resource(ttl=600)
 def connect_gsheet():
@@ -105,46 +105,64 @@ def connect_gsheet():
 def verify_login(role, user_code, password, device_id):
     sheet = connect_gsheet()
     if not sheet:
-        return False, "Chưa kết nối được với Server Google Sheets!"
+        return False, "Chưa kết nối được với Server Google Sheets! Vui lòng kiểm tra st.secrets."
     
     ws_name = "QuanLy" if role == "VFHTP" else "NhanVien"
     try:
         ws = sheet.worksheet(ws_name)
-        records = ws.get_all_records()
+        rows = ws.get_all_values() # Đọc toàn bộ ô dưới dạng mảng 2 chiều
     except Exception as e:
         return False, f"Lỗi đọc dữ liệu sheet {ws_name}: {e}"
     
-    # Đồng bộ tên cột với Google Sheet
-    col_code = "Mã VFHTP" if role == "VFHTP" else "Mã NV"
+    if len(rows) < 2:
+        return False, f"Sheet {ws_name} chưa có dữ liệu tài khoản!"
+
+    headers = [str(h).strip() for h in rows[0]]
     
-    for idx, row in enumerate(records, start=2):
-        # Lấy giá trị mã quản lý / mã NV (Hỗ trợ cả trường hợp tên cột A1 trong sheet QuanLy chưa đổi)
-        val_code = row.get(col_code) or row.get("ban d") or list(row.values())[0]
+    # Tìm chỉ số các cột
+    col_code_idx = 0 # Cột A mặc định là Mã đăng nhập
+    col_pass_idx = headers.index("Mật Khẩu") if "Mật Khẩu" in headers else 1
+    col_status_idx = headers.index("Trạng Thái") if "Trạng Thái" in headers else -1
+    col_device_idx = headers.index("Device_ID") if "Device_ID" in headers else -1
+
+    dev_str = str(device_id).strip() if device_id and device_id != 0 else ""
+
+    for row_idx, row in enumerate(rows[1:], start=2):
+        if not row or len(row) == 0:
+            continue
+            
+        code_val = str(row[col_code_idx]).strip() if len(row) > col_code_idx else ""
+        pass_val = str(row[col_pass_idx]).strip() if len(row) > col_pass_idx else ""
         
-        if str(val_code).strip() == user_code.strip():
-            if str(row.get("Mật Khẩu", "")).strip() != str(password).strip():
+        if code_val == user_code.strip():
+            if pass_val != str(password).strip():
                 return False, "Mật khẩu không chính xác!"
             
-            if role == "NHAN_VIEN" and str(row.get("Trạng Thái", "")).strip() != "Đã duyệt":
-                return False, "Tài khoản Nhân viên chưa được cấp duyệt!"
+            # Kiểm tra trạng thái cho Nhân viên
+            if role == "NHAN_VIEN" and col_status_idx != -1 and len(row) > col_status_idx:
+                status_val = str(row[col_status_idx]).strip()
+                if status_val != "Đã duyệt":
+                    return False, "Tài khoản Nhân viên chưa được cấp duyệt!"
             
-            current_device = str(row.get("Device_ID", "")).strip()
-            if current_device and device_id and current_device != str(device_id).strip():
-                return False, "⛔ Tài khoản này đã đăng nhập trên thiết bị khác! Mỗi tài khoản chỉ dùng trên 1 thiết bị."
-            
-            # Cập nhật Device ID nếu chưa ghi nhận
-            if not current_device and device_id:
-                cols = list(row.keys())
-                if "Device_ID" in cols:
-                    col_idx = cols.index("Device_ID") + 1
-                    ws.update_cell(idx, col_idx, str(device_id))
+            # Kiểm tra thiết bị
+            if col_device_idx != -1 and len(row) > col_device_idx:
+                current_device = str(row[col_device_idx]).strip()
+                
+                if current_device and dev_str and current_device != dev_str:
+                    return False, "⛔ Tài khoản này đã đăng nhập trên thiết bị khác!"
+                
+                # Cập nhật Device ID nếu chưa ghi nhận
+                if not current_device and dev_str:
+                    try:
+                        ws.update_cell(row_idx, col_device_idx + 1, dev_str)
+                    except Exception:
+                        pass
                 
             return True, "Thành công"
             
-    return False, f"Không tìm thấy mã đăng nhập trên hệ thống!"
+    return False, f"Không tìm thấy Mã '{user_code}' trên hệ thống!"
 
 def luu_du_lieu_realtime(loai, hang_du_lieu):
-    # Lưu file Excel cục bộ dự phòng
     try:
         file_name = f"ThongKe_Showroom_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
         if os.path.exists(file_name):
@@ -169,7 +187,6 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
     except Exception as e:
         print(f"Lỗi ghi Excel cục bộ: {e}")
 
-    # Đẩy dữ liệu Realtime lên Google Sheets
     sheet = connect_gsheet()
     if sheet:
         try:
@@ -186,19 +203,23 @@ def cap_nhat_nhan_vien(ma_nv, mat_khau_moi=None, trang_thai_moi=None, reset_devi
     
     try:
         ws = sheet.worksheet("NhanVien")
-        records = ws.get_all_records()
+        rows = ws.get_all_values()
     except Exception as e:
         return False, f"Lỗi đọc sheet NhanVien: {e}"
     
-    for idx, row in enumerate(records, start=2):
-        if str(row.get("Mã NV", "")).strip() == ma_nv.strip():
-            cols = list(row.keys())
-            if mat_khau_moi and "Mật Khẩu" in cols:
-                ws.update_cell(idx, cols.index("Mật Khẩu") + 1, str(mat_khau_moi).strip())
-            if trang_thai_moi and "Trạng Thái" in cols:
-                ws.update_cell(idx, cols.index("Trạng Thái") + 1, str(trang_thai_moi).strip())
-            if reset_device and "Device_ID" in cols:
-                ws.update_cell(idx, cols.index("Device_ID") + 1, "")
+    if len(rows) < 2:
+        return False, "Danh sách Nhân viên rỗng!"
+
+    headers = [str(h).strip() for h in rows[0]]
+    
+    for idx, row in enumerate(rows[1:], start=2):
+        if row and str(row[0]).strip() == ma_nv.strip():
+            if mat_khau_moi and "Mật Khẩu" in headers:
+                ws.update_cell(idx, headers.index("Mật Khẩu") + 1, str(mat_khau_moi).strip())
+            if trang_thai_moi and "Trạng Thái" in headers:
+                ws.update_cell(idx, headers.index("Trạng Thái") + 1, str(trang_thai_moi).strip())
+            if reset_device and "Device_ID" in headers:
+                ws.update_cell(idx, headers.index("Device_ID") + 1, "")
             return True, f"Đã cập nhật thành công cho Mã NV: {ma_nv}"
             
     return False, f"Không tìm thấy Mã NV: {ma_nv}"
