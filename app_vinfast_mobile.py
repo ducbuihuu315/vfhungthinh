@@ -1,3 +1,20 @@
+Dưới đây là toàn bộ mã nguồn app_vinfast_mobile.py đã được cập nhật bổ sung đầy đủ:
+
+Bổ sung các thông số chi tiết:
+
+Loại trần xe: Trần kính toàn cảnh / Trần thép.
+
+Tính năng nổi trội cùng phân khúc: ADAS (Lái xe thông minh), Smart Services, trợ lý ảo ViVi, camera 360, v.v.
+
+So sánh xe cùng loại / Đối thủ cùng phân khúc: So sánh trực tiếp với các dòng xe xăng/điện cùng tầm giá.
+
+Cập nhật giao diện hiển thị:
+
+Thêm tab "Đặc điểm nổi bật & So sánh" khi khách chọn xe (ở cả phần Khách đến, Khách rời và Tra cứu).
+
+Giữ nguyên toàn bộ cấu hình ảnh .jpg chuẩn theo thư mục hinhanh trên Repository vfhungthinh.
+
+Python
 import os
 import openpyxl
 import pandas as pd
@@ -73,7 +90,7 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. KHỞI TẠO SESSION & DỮ LIỆU CÁC DÒNG XE & HÌNH ẢNH
+# 2. KHỞI TẠO SESSION & DỮ LIỆU CÁC DÒNG XE & HÌNH ẢNH & THÔNG SỐ SO SÁNH
 # ==============================================================================
 if "page" not in st.session_state:
     st.session_state.page = "home"
@@ -104,15 +121,60 @@ def hien_thi_anh_xe(dong_xe):
     elif dong_xe in HINH_ANH_XE:
         st.image(HINH_ANH_XE[dong_xe], caption=f"Xe VinFast {dong_xe}", use_container_width=True)
 
-# Dữ liệu xe VinFast dùng chung
+# Dữ liệu xe VinFast chi tiết (Bổ sung Trần xe, Tính năng nổi bật, So sánh)
 data_vinfast = {
     "Dòng xe": ["VF 2", "VF 3", "VF 5 Plus", "VF 6", "VF 7", "VF 8", "VF 9"],
+    "Phân khúc": ["Mini Car", "Mini SUV", "SUV Hạng A", "SUV Hạng B", "SUV Hạng C", "SUV Hạng D", "SUV Hạng E"],
     "Giá niêm yết (VND)": [188000000, 302000000, 529000000, 689000000, 789000000, 1069000000, 1499000000],
-    "Quãng đường tối đa": ["~120 - 150 km", "~210 km", "~326 km", "~399 km", "~450 km", "~471 km", "~626 km"]
+    "Quãng đường/sạc": ["~120 - 150 km", "~210 km", "~326 km", "~399 km", "~450 km", "~471 km", "~626 km"],
+    "Trần xe": [
+        "Trần thép", 
+        "Trần thép", 
+        "Trần thép", 
+        "Trần thép (Bản Eco) / Kính (Bản Plus)", 
+        "Trần thép (Bản Eco) / Kính toàn cảnh (Bản Plus)", 
+        "Trần thép (Bản Eco) / Kính toàn cảnh (Bản Plus)", 
+        "Trần kính toàn cảnh chống tia UV"
+    ],
+    "Tính năng nổi trội": [
+        "Nhỏ gọn tối ưu đô thị, chi phí vận hành siêu rẻ",
+        "Thiết kế SUV vuông vức cá tính, khoảng sáng gầm cao, màn hình 10 inch",
+        "6 túi khí, cảnh báo điểm mù, luồng giao thông đến khi mở cửa, giá cực tốt",
+        "Trợ lý ảo ViVi, ADAS cấp độ 2, chip xử lý hiện đại, nội thất da cao cấp",
+        "Thiết kế phi thuyền cá tính, công suất tới 349 mã lực, HUD hắt kính, ADAS đầy đủ",
+        "Động cơ 402 mã lực, dẫn động 4 bánh AWD, sưởi/thông gió hàng ghế trước",
+        "Nội thất Thương gia VIP, ghế massage, màn hình 15.6 inch, hệ thống treo khí nén"
+    ],
+    "So sánh cùng phân khúc": [
+        "Vượt trội Wuling Mini EV về quãng đường đi và độ an toàn khung gầm",
+        "Rộng rãi và nhiều trang bị công nghệ hơn các dòng xe xăng hạng A giá rẻ",
+        "Chi phí lăn bánh rẻ hơn Raize, Sonet; công nghệ an toàn ADAS vượt trội",
+        "Mạnh mẽ hơn Seltos, Creta; chi phí nhiên liệu chỉ bằng 1/3 xe xăng",
+        "Tăng tốc nhanh hơn CX-5, CR-V, Tucson; công nghệ thông minh áp đảo",
+        "Động cơ mạnh tương đương Porsche Macan, chi phí bảo dưỡng cực thấp hơn SantaFe, Sorento",
+        "Đẳng cấp tương đương Lexus RX, BMW X5 nhưng giá chỉ bằng 1/3"
+    ]
 }
+
 df_vinfast = pd.DataFrame(data_vinfast)
 cac_dong_xe = sorted(list(set(data_vinfast["Dòng xe"])))
 cac_mau_xe = ["Trắng", "Đen", "Xám", "Bạc", "Xanh", "Đỏ"]
+
+def hien_thi_thong_tin_so_sanh(dong_xe):
+    """Hàm hiển thị bảng so sánh & tính năng nổi bật của xe"""
+    row = df_vinfast[df_vinfast["Dòng xe"] == dong_xe].iloc[0]
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        st.info(f"🧱 **Loại trần xe:** {row['Trạng thái trần xe'] if 'Trạng thái trần xe' in row else row['Trần xe']}")
+        st.success(f"🔋 **Quãng đường:** {row['Quãng đường/sạc']}")
+    with col2:
+        st.warning(f"🏷️ **Phân khúc:** {row['Phân khúc']}")
+        st.error(f"💰 **Giá niêm yết:** {row['Giá niêm yết (VND)']:,.0f} VNĐ")
+        
+    st.markdown("---")
+    st.markdown(f"✨ **Tính năng nổi trội cùng phân khúc:**\n- {row['Tính năng nổi trội']}")
+    st.markdown(f"⚔️ **So sánh đối thủ cùng tầm giá:**\n- {row['So sánh cùng phân khúc']}")
 
 # ==============================================================================
 # 3. HÀM KẾT NỐI VÀ LƯU DỮ LIỆU
@@ -213,9 +275,10 @@ elif st.session_state.page == "khach_den":
     # Hiển thị hình ảnh xe chọn
     hien_thi_anh_xe(xe_chon)
 
-    st.markdown(f"**📊 Chi tiết thông số dòng xe {xe_chon}:**")
-    df_sub = df_vinfast[df_vinfast["Dòng xe"] == xe_chon]
-    st.dataframe(df_sub, use_container_width=True, hide_index=True)
+    # Hiển thị phân tích nổi bật & So sánh đối thủ
+    with st.expander(f"🔍 Xem So sánh & Tính năng nổi bật của {xe_chon}", expanded=True):
+        hien_thi_thong_tin_so_sanh(xe_chon)
+
     st.write("---")
 
     with st.form("form_khach_den", clear_on_submit=True):
@@ -266,10 +329,9 @@ elif st.session_state.page == "khach_ve":
         for idx, xe in enumerate(ds_xe_da_xem):
             with cols[idx]:
                 hien_thi_anh_xe(xe)
+                with st.expander(f"ℹ️ Tính năng & So sánh {xe}"):
+                    hien_thi_thong_tin_so_sanh(xe)
 
-        st.markdown(f"**📊 Chi tiết thông số dòng xe đã xem:**")
-        df_sub_ve = df_vinfast[df_vinfast["Dòng xe"].isin(ds_xe_da_xem)]
-        st.dataframe(df_sub_ve, use_container_width=True, hide_index=True)
     st.write("---")
 
     with st.form("form_khach_ve", clear_on_submit=True):
@@ -300,16 +362,19 @@ elif st.session_state.page == "khach_ve":
         st.rerun()
 
 # ==============================================================================
-# 7. MÀN HÌNH TRA CỨU BẢNG GIÁ / THÔNG SỐ XE & XEM HÌNH ẢNH
+# 7. MÀN HÌNH TRA CỨU BẢNG GIÁ / THÔNG SỐ XE & XEM HÌNH ẢNH / SO SÁNH
 # ==============================================================================
 elif st.session_state.page == "tra_cuu":
-    st.markdown('<div class="sub-title">📋 TRA CỨU BẢNG GIÁ & THÔNG SỐ XE VINFAST</div>', unsafe_allow_html=True)
+    st.markdown('<div class="sub-title">📋 TRA CỨU BẢNG GIÁ & THÔNG SỐ CÁC DÒNG XE</div>', unsafe_allow_html=True)
     
-    xe_xem_anh = st.selectbox("Chọn dòng xe để xem hình ảnh trực quan:", cac_dong_xe)
+    xe_xem_anh = st.selectbox("Chọn dòng xe để tra cứu chi tiết:", cac_dong_xe)
     hien_thi_anh_xe(xe_xem_anh)
     
+    st.markdown(f"### ⚡ Chi tiết xe VinFast {xe_xem_anh}")
+    hien_thi_thong_tin_so_sanh(xe_xem_anh)
+    
     st.write("---")
-    st.markdown("**📊 Bảng tổng hợp thông số & Giá niêm yết:**")
+    st.markdown("**📊 Bảng tổng hợp so sánh tất cả các dòng xe:**")
     df_display = df_vinfast.copy()
     df_display["Giá niêm yết (VND)"] = df_display["Giá niêm yết (VND)"].apply(lambda x: f"{x:,.0f} VNĐ")
     st.dataframe(df_display, use_container_width=True, hide_index=True)
