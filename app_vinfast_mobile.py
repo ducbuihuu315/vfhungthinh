@@ -476,10 +476,6 @@ elif st.session_state.page == "home":
         set_page("tra_cuu")
         st.rerun()
 
-    if st.button("💬 GỬI Ý KIẾN ĐÓNG GÓP", key="btn_home_gui_y_kien", use_container_width=True):
-        set_page("gui_y_kien")
-        st.rerun()
-
     # PHÂN QUYỀN BAN GIÁM ĐỐC
     if user.get("chuc_vu") == "giam_doc":
         if st.button("4. 📊 BÁO CÁO THỐNG KÊ THEO NGÀY", key="btn_home_bao_cao", use_container_width=True):
