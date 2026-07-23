@@ -12,6 +12,71 @@ try:
     HAS_GSPREAD = True
 except ImportError:
     HAS_GSPREAD = False
+# ==============================================================================
+# MÀN HÌNH ĐĂNG NHẬP (LOGIN)
+# ==============================================================================
+if st.session_state.page == "login" or not st.session_state.user_info:
+    st.markdown("""
+        <div class="main-title">
+            🚘 VINFAST HƯNG THỊNH PHÁT<br>
+            <span style="font-size: 14px; color: #00d26a;">ĐĂNG NHẬP HỆ THỐNG</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("form_login"):
+        username = st.text_input("Tên đăng nhập:")
+        password = st.text_input("Mật khẩu:", type="password")
+        btn_login = st.form_submit_button("🔑 ĐĂNG NHẬP", use_container_width=True, type="primary")
+
+        if btn_login:
+            if not username.strip() or not password.strip():
+                st.error("⚠️ Vui lòng nhập đầy đủ thông tin!")
+            else:
+                success, result = xac_thuc_dang_nhap(username.strip(), password.strip())
+                if success:
+                    st.session_state.user_info = result
+                    st.session_state.page = "home"
+                    st.success(f"Xin chào {result['ho_ten']}!")
+                    st.rerun()
+                else:
+                    st.error(result)
+
+# ...Tạo Màn Hình Đăng Nhập & Cập Nhật Điều Hướng Trang Chính==============================================================================
+# MÀN HÌNH CHÍNH (HOME)
+# ==============================================================================
+elif st.session_state.page == "home":
+    user = st.session_state.user_info
+    chuc_vu_text = "Giám Đốc Showroom" if user["chuc_vu"] == "giam_doc" else "Nhân Viên Showroom"
+
+    st.markdown(f"""
+        <div class="main-title">
+            🚘 VINFAST HƯNG THỊNH PHÁT<br>
+            <span style="font-size: 14px; color: #00d26a;">Xin chào: {user['ho_ten']} ({chuc_vu_text})</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    if st.button("1. 🚗 KHÁCH ĐẾN SHOWROOM", use_container_width=True, type="primary"):
+        set_page("khach_den")
+        st.rerun()
+
+    if st.button("2. 🚶 KHÁCH RỜI SHOWROOM", use_container_width=True):
+        set_page("khach_ve")
+        st.rerun()
+
+    if st.button("3. 📋 TRA CỨU BẢNG GIÁ / THÔNG SỐ XE", use_container_width=True):
+        set_page("tra_cuu")
+        st.rerun()
+
+    # PHÂN QUYỀN: Chỉ Giám đốc mới thấy mục Báo cáo
+    if user["chuc_vu"] == "giam_doc":
+        if st.button("4. 📊 BÁO CÁO THỐNG KÊ THEO NGÀY", use_container_width=True):
+            set_page("bao_cao")
+            st.rerun()
+
+    st.write("---")
+    if st.button("🚪 ĐĂNG XUẤT", use_container_width=True):
+        dang_xuat()
+
 
 # ==============================================================================
 # 1. CẤU HÌNH TRANG & MÀN HÌNH NỀN (BACKGROUND)
@@ -81,6 +146,9 @@ if "user_info" not in st.session_state:
 
 if "page" not in st.session_state:
     st.session_state.page = "login"   # Mặc định chưa đăng nhập sẽ ở trang 'login'
+    
+# ....2 hàm trên là Cập nhật Mã nguồn
+
 if "page" not in st.session_state:
     st.session_state.page = "home"
 
@@ -256,6 +324,59 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
 
     except Exception as e:
         st.error(f"⚠️ Lỗi khi đồng bộ dữ liệu: {e}")
+        
+    #...Thêm Hàm Xử Lý Đăng Nhập & Giới Hạn Thiết Bị
+    
+    def xac_thuc_dang_nhap(username, password):
+    """Hàm xác thực đăng nhập và khóa tài khoản theo thiết bị"""
+    headers = st.context.headers
+    # Lấy thông tin đặc xưng trình duyệt/máy làm ID thiết bị (device_id)
+    device_id = headers.get("User-Agent", "N/A") + "_" + headers.get("X-Forwarded-For", "N/A").split(',')[0].strip()
+
+    if not supabase_client:
+        return False, "⚠️ Không kết nối được CSDL!"
+
+    try:
+        # Kiểm tra tên đăng nhập & mật khẩu
+        res = supabase_client.table("tai_khoan") \
+            .select("*") \
+            .eq("ten_dang_nhap", username) \
+            .eq("mat_khau", password) \
+            .execute()
+
+        if not res.data:
+            return False, "❌ Sai tên đăng nhập hoặc mật khẩu!"
+
+        user = res.data[0]
+        current_device = user.get("device_id")
+
+        # Kiểm tra giới hạn thiết bị
+        if current_device and current_device != device_id:
+            return False, "🚫 Tài khoản này đang được đăng nhập trên một thiết bị khác!"
+
+        # Cập nhật device_id cho thiết bị hiện tại
+        supabase_client.table("tai_khoan") \
+            .update({"device_id": device_id}) \
+            .eq("ten_dang_nhap", username) \
+            .execute()
+
+        return True, user
+    except Exception as e:
+        return False, f"⚠️ Lỗi xác thực: {e}"
+
+def dang_xuat():
+    """Đăng xuất và xóa đăng ký thiết bị"""
+    if st.session_state.user_info and supabase_client:
+        try:
+            supabase_client.table("tai_khoan") \
+                .update({"device_id": None}) \
+                .eq("ten_dang_nhap", st.session_state.user_info["ten_dang_nhap"]) \
+                .execute()
+        except Exception:
+            pass
+    st.session_state.user_info = None
+    st.session_state.page = "login"
+    st.rerun()
 
 # ==============================================================================
 # 4. MÀN HÌNH CHÍNH (HOME)
