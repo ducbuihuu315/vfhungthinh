@@ -374,7 +374,22 @@ elif st.session_state.page == "home":
     st.write("---")
     if st.button("🚪 ĐĂNG XUẤT", use_container_width=True):
         dang_xuat()
+        
+# --- Chèn thêm nút Ý kiến đóng góp cho tất cả người dùng ---
+    if st.button("💬 GỬI Ý KIẾN ĐÓNG GÓP", use_container_width=True):
+        set_page("gui_y_kien")
+        st.rerun()
 
+    # PHÂN QUYỀN: Chỉ Giám đốc mới thấy mục Báo cáo & Quản lý ý kiến
+    if user["chuc_vu"] == "giam_doc":
+        if st.button("4. 📊 BÁO CÁO THỐNG KÊ THEO NGÀY", use_container_width=True):
+            set_page("bao_cao")
+            st.rerun()
+            
+        # --- Chèn thêm nút Quản lý ý kiến dành riêng cho Giám đốc ---
+        if st.button("5. 📬 QUẢN LÝ Ý KIẾN & PHẢN HỒI (BGĐ)", use_container_width=True, type="primary"):
+            set_page("quan_ly_y_kien")
+            st.rerun()
 # ------------------------------------------------------------------------------
 # KHÂU KHÁCH ĐẾN SHOWROOM
 # ------------------------------------------------------------------------------
@@ -567,3 +582,93 @@ elif st.session_state.page == "bao_cao":
     if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
         set_page("home")
         st.rerun()
+
+# ------------------------------------------------------------------------------
+# MÀN HÌNH GỬI Ý KIẾN ĐÓNG GÓP (CHO KHÁCH HÀNG & NHÂN VIÊN)
+# ------------------------------------------------------------------------------
+elif st.session_state.page == "gui_y_kien":
+    st.markdown('<div class="sub-title">💬 GỬI Ý KIẾN ĐÓNG GÓP</div>', unsafe_allow_html=True)
+    st.info("Ý kiến của bạn sẽ được gửi trực tiếp và bảo mật tới Ban Giám Đốc.")
+
+    loai_y_kien = st.radio("Bạn là:", ["Khách hàng", "Nhân viên"], horizontal=True)
+    
+    with st.form("form_y_kien", clear_on_submit=True):
+        if loai_y_kien == "Khách hàng":
+            ten_nguoi_gui = st.text_input("Họ tên / Số điện thoại (Không bắt buộc):", value="Khách hàng")
+        else:
+            user_nv = st.session_state.user_info.get("ho_ten", "Nhân viên")
+            ten_nguoi_gui = st.text_input("Tên / Mã nhân viên:", value=user_nv)
+
+        noi_dung = st.text_area("Nội dung đóng góp ý kiến / Góp ý dịch vụ: *", height=120)
+        btn_gui = st.form_submit_button("🚀 GỬI Ý KIẾN TỚI BGĐ", use_container_width=True, type="primary")
+
+        if btn_gui:
+            if not noi_dung.strip():
+                st.error("⚠️ Vui lòng nhập nội dung ý kiến!")
+            else:
+                try:
+                    data_yk = {
+                        "thoi_gian": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "nguoi_gui": ten_nguoi_gui.strip(),
+                        "loai_y_kien": loai_y_kien,
+                        "noi_dung": noi_dung.strip()
+                    }
+                    supabase_client.table("y_kien_dong_gop").insert(data_yk).execute()
+                    st.success("✅ Cảm ơn bạn! Ý kiến đóng góp đã được gửi thành công tới Ban Giám Đốc.")
+                except Exception as e:
+                    st.error(f"⚠️ Lỗi khi gửi ý kiến: {e}")
+
+    st.write("---")
+    if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
+        set_page("home")
+        st.rerun()
+
+# ------------------------------------------------------------------------------
+# MÀN HÌNH QUẢN LÝ Ý KIẾN & TRẢ LỜI DÀNH RIÊNG CHO BAN GIÁM ĐỐC
+# ------------------------------------------------------------------------------
+elif st.session_state.page == "quan_ly_y_kien":
+    # Bảo mật: Kiểm tra xem có đúng là Ban Giám Đốc không
+    if st.session_state.user_info.get("chuc_vu") != "giam_doc":
+        st.error("🚫 Quyền truy cập bị từ chối! Trang này chỉ dành cho Ban Giám Đốc.")
+        if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH"):
+            set_page("home")
+            st.rerun()
+    else:
+        st.markdown('<div class="sub-title">📬 HỘM THƯ Ý KIẾN ĐÓNG GÓP (BAN GIÁM ĐỐC)</div>', unsafe_allow_html=True)
+
+        if supabase_client:
+            try:
+                # Lấy toàn bộ danh sách ý kiến
+                res = supabase_client.table("y_kien_dong_gop").select("*").order("id", desc=True).execute()
+                ds_y_kien = res.data
+
+                if not ds_y_kien:
+                    st.info("Hiện chưa có ý kiến đóng góp nào.")
+                else:
+                    for item in ds_y_kien:
+                        with st.expander(f"📩 [{item['loai_y_kien']}] {item['nguoi_gui']} - {item['thoi_gian'][:16]}", expanded=(item['phan_hoi'] is None)):
+                            st.write(f"**Nội dung đóng góp:**")
+                            st.warning(item['noi_dung'])
+
+                            if item.get('phan_hoi'):
+                                st.success(f"💬 **BGĐ đã trả lời ({item.get('thoi_gian_phan_hoi', '')[:16]}):**\n\n{item['phan_hoi']}")
+                            else:
+                                st.write("✍️ **Viết phản hồi của Ban Giám Đốc:**")
+                                phan_hoi_text = st.text_area("Nội dung phản hồi:", key=f"reply_{item['id']}")
+                                if st.button("💾 Gửi phản hồi", key=f"btn_reply_{item['id']}"):
+                                    if phan_hoi_text.strip():
+                                        supabase_client.table("y_kien_dong_gop").update({
+                                            "phan_hoi": phan_hoi_text.strip(),
+                                            "thoi_gian_phan_hoi": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                        }).eq("id", item['id']).execute()
+                                        st.success("✅ Đã lưu phản hồi thành công!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Vui lòng nhập nội dung phản hồi.")
+            except Exception as e:
+                st.error(f"⚠️ Lỗi tải danh sách ý kiến: {e}")
+
+        st.write("---")
+        if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
+            set_page("home")
+            st.rerun()
