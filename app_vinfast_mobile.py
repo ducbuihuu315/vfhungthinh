@@ -332,30 +332,31 @@ if not st.session_state.get("logged_in"):
 else:
     user = st.session_state.user_info
 
-    # --- KIỂM TRA KHAI BÁO CHỨC VỤ LẦN ĐẦU CHO NHÂN VIÊN ---
-    if user.get("lan_dang_nhap_dau", False) and user.get("chuc_vu") != "giam_doc":
-        st.warning("👋 Dành cho lần đăng nhập đầu tiên: Vui lòng khai báo Chức vụ / Bộ phận của bạn. (Chức vụ này sẽ cố định cho các lần sau)")
-        chuc_vu_nhap = st.selectbox("Chọn Chức vụ / Bộ phận:", ["Cố vấn dịch vụ", "Kỹ thuật viên", "Tư vấn bán hàng", "Thu ngân / Kế toán", "Hành chính / Bãi xe", "Khác"])
-        ho_ten_nhap = st.text_input("Họ và tên nhân viên:", value=user.get("ho_ten", ""))
+# --- KIỂM TRA KHAI BÁO CHỨC VỤ LẦN ĐẦU CHO NHÂN VIÊN ---
+if user.get("lan_dang_nhap_dau", False) and user.get("chuc_vu") != "giam_doc":
+    st.warning("👋 Dành cho lần đăng nhập đầu tiên: Vui lòng khai báo Chức vụ / Bộ phận của bạn. (Chức vụ này sẽ cố định cho các lần sau)")
+    chuc_vu_nhap = st.selectbox("Chọn Chức vụ / Bộ phận:", ["Cố vấn dịch vụ", "Kỹ thuật viên", "Tư vấn bán hàng", "Thu ngân / Kế toán", "Hành chính / Bãi xe", "Khác"])
+    ho_ten_nhap = st.text_input("Họ và tên nhân viên:", value=user.get("ho_ten", ""))
 
-        if st.button("💾 XÁC NHẬN CHỨC VỤ & BẮT ĐẦU", type="primary", use_container_width=True):
-            if not ho_ten_nhap.strip():
-                st.error("Vui lòng nhập Họ tên!")
-            else:
-                # Cập nhật cố định và khóa đổi chức vụ lần sau
-                supabase_client.table("tai_khoan").update({
-                    "ho_ten": ho_ten_nhap.strip(),
-                    "chuc_vu": chuc_vu_nhap,
-                    "lan_dang_nhap_dau": False
-                }).eq("ten_dang_nhap", user["ten_dang_nhap"]).execute()
+    if st.button("💾 XÁC NHẬN CHỨC VỤ & BẮT ĐẦU", type="primary", use_container_width=True):
+        if not ho_ten_nhap.strip():
+            st.error("Vui lòng nhập Họ tên!")
+        else:
+            # Cập nhật cố định và khóa đổi chức vụ lần sau
+            supabase_client.table("tai_khoan").update({
+                "ho_ten": ho_ten_nhap.strip(),
+                "chuc_vu": chuc_vu_nhap,
+                "lan_dang_nhap_dau": False
+            }).eq("ten_dang_nhap", user["ten_dang_nhap"]).execute()
 
-                st.session_state.user_info["ho_ten"] = ho_ten_nhap.strip()
-                st.session_state.user_info["chuc_vu"] = chuc_vu_nhap
-                st.session_state.user_info["lan_dang_nhap_dau"] = False
-                st.success("✅ Cập nhật thông tin thành công!")
-                st.rerun()
-    else:
-        # Vào trang chủ bình thường...
+            st.session_state.user_info["ho_ten"] = ho_ten_nhap.strip()
+            st.session_state.user_info["chuc_vu"] = chuc_vu_nhap
+            st.session_state.user_info["lan_dang_nhap_dau"] = False
+            st.success("✅ Cập nhật thông tin thành công!")
+            st.rerun()
+else:
+    # Trường hợp đã khai báo thông tin hoặc không phải lần đăng nhập đầu
+    pass
 
 def dang_xuat():
     """Đăng xuất và xóa đăng ký thiết bị"""
