@@ -189,6 +189,7 @@ def check_single_device_session():
         except Exception:
             pass
 
+# (Dòng 192)
 def dang_xuat():
     """Đăng xuất và xóa đăng ký thiết bị"""
     if st.session_state.user_info and supabase_client:
@@ -202,7 +203,20 @@ def dang_xuat():
     st.session_state.user_info = None
     st.session_state.logged_in = False
     st.session_state.page = "login"
-    st.rerun()
+    st.rerun()  # Dòng 205
+
+# --- CHÈN MÃ MỚI TỪ DÒNG 207 ---
+def xoa_thong_bao_het_han():
+    """Tự động xóa các thông báo chung đã tạo quá 7 ngày"""
+    if supabase_client:
+        try:
+            # Lấy thời điểm 7 ngày trước
+            tu_ngay = (datetime.now() - timedelta(days=7)).strftime("%Y-%m-%d %H:%M:%S")
+            # Xóa các dòng có thời gian tạo nhỏ hơn 7 ngày trước
+            supabase_client.table("thong_bao_chung").delete().lt("thoi_gian", tu_ngay).execute()
+        except Exception:
+            pass
+# -------------------------------
 
 # ==============================================================================
 # 3. KHỞI TẠO SESSION & DỮ LIỆU DÒNG XE / HÌNH ẢNH / THÔNG SỐ SO SÁNH
@@ -243,6 +257,9 @@ def hien_thi_anh_xe(dong_xe):
         st.image(file_local_jpg_slug, caption=f"Xe VinFast {dong_xe}", use_container_width=True)
     elif dong_xe in HINH_ANH_XE:
         st.image(HINH_ANH_XE[dong_xe], caption=f"Xe VinFast {dong_xe}", use_container_width=True)
+
+# Tự động dọn dẹp thông báo cũ quá 7 ngày mỗi khi ứng dụng chạy
+xoa_thong_bao_het_han()
 
 # Dữ liệu đầy đủ 19 phiên bản dòng xe VinFast
 data_vinfast = {
@@ -435,7 +452,7 @@ elif st.session_state.page == "home":
             set_page("bao_cao")
             st.rerun()
 
-        if st.button("5. 📬 QUẢN LÝ Ý KIẾN & PHẢN HỒI (BGĐ)", key="btn_home_quan_ly_yk", use_container_width=True, type="primary"):
+        if st.button("5. 📢 BAN GIÁM ĐỐC THÔNG BÁO", key="btn_home_bgd_thong_bao", use_container_width=True, type="primary"):
             set_page("quan_ly_y_kien")
             st.rerun()
 
@@ -670,47 +687,63 @@ elif st.session_state.page == "gui_y_kien":
         st.rerun()
 
 # ------------------------------------------------------------------------------
-# MÀN HÌNH QUẢN LÝ Ý KIẾN (DÀNH CHO BGĐ)
+# MÀN HÌNH BAN GIÁM ĐỐC THÔNG BÁO (CHỈ TÀI KHOẢN BGD CÓ QUYỀN)
 # ------------------------------------------------------------------------------
 elif st.session_state.page == "quan_ly_y_kien":
+    # Kiểm tra phân quyền: Chỉ cho phép tài khoản Ban Giám Đốc
     if st.session_state.user_info.get("chuc_vu") != "giam_doc":
-        st.error("🚫 Quyền truy cập bị từ chối! Trang này chỉ dành cho Ban Giám Đốc.")
+        st.error("🚫 Quyền truy cập bị từ chối! Tính năng này chỉ dành riêng cho Ban Giám Đốc.")
         if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH"):
             set_page("home")
             st.rerun()
     else:
-        st.markdown('<div class="sub-title">📬 HỘM THƯ Ý KIẾN ĐÓNG GÓP (BAN GIÁM ĐỐC)</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sub-title">📢 BAN GIÁM ĐỐC THÔNG BÁO TỚI TOÀN BỘ NHÂN VIÊN</div>', unsafe_allow_html=True)
 
+        # Form tạo thông báo mới gửi tới toàn thể nhân viên
+        with st.form("form_bgd_thong_bao", clear_on_submit=True):
+            tieu_de_tb = st.text_input("📌 Tiêu đề thông báo: *")
+            noi_dung_tb = st.text_area("📝 Nội dung thông báo chi tiết: *", height=120)
+            btn_phat_tb = st.form_submit_button("🚀 ĐĂNG THÔNG BÁO (TỰ ĐỘNG XÓA SAU 7 NGÀY)", type="primary", use_container_width=True)
+
+            if btn_phat_tb:
+                if not tieu_de_tb.strip() or not noi_dung_tb.strip():
+                    st.error("⚠️ Vui lòng nhập đầy đủ Tiêu đề và Nội dung thông báo!")
+                else:
+                    try:
+                        thoi_gian_hien_tai = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        supabase_client.table("thong_bao_chung").insert({
+                            "nguoi_gui": st.session_state.user_info.get("ho_ten", "Ban Giám Đốc"),
+                            "tieu_de": tieu_de_tb.strip(),
+                            "noi_dung": noi_dung_tb.strip(),
+                            "thoi_gian": thoi_gian_hien_tai
+                        }).execute()
+                        st.success("✅ Đã phát thông báo thành công tới toàn bộ nhân viên!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"⚠️ Lỗi khi gửi thông báo: {e}")
+
+        st.write("---")
+        st.subheader("📋 Danh sách các thông báo đang hiển thị (Lưu trong 7 ngày):")
+
+        # Hiển thị các thông báo hiện có trong CSDL
         if supabase_client:
             try:
-                res = supabase_client.table("y_kien_dong_gop").select("*").order("id", desc=True).execute()
-                ds_y_kien = res.data
+                res_tb = supabase_client.table("thong_bao_chung").select("*").order("id", desc=True).execute()
+                ds_tb = res_tb.data or []
 
-                if not ds_y_kien:
-                    st.info("Hiện chưa có ý kiến đóng góp nào.")
+                if not ds_tb:
+                    st.info("Hiện không có thông báo nào trong vòng 7 ngày qua.")
                 else:
-                    for item in ds_y_kien:
-                        with st.expander(f"📩 [{item['loai_y_kien']}] {item['nguoi_gui']} - {item['thoi_gian'][:16]}", expanded=(item.get('phan_hoi') is None)):
-                            st.write(f"**Nội dung đóng góp:**")
-                            st.warning(item['noi_dung'])
-
-                            if item.get('phan_hoi'):
-                                st.success(f"💬 **BGĐ đã trả lời ({item.get('thoi_gian_phan_hoi', '')[:16]}):**\n\n{item['phan_hoi']}")
-                            else:
-                                st.write("✍️ **Viết phản hồi của Ban Giám Đốc:**")
-                                phan_hoi_text = st.text_area("Nội dung phản hồi:", key=f"reply_{item['id']}")
-                                if st.button("💾 Gửi phản hồi", key=f"btn_reply_{item['id']}"):
-                                    if phan_hoi_text.strip():
-                                        supabase_client.table("y_kien_dong_gop").update({
-                                            "phan_hoi": phan_hoi_text.strip(),
-                                            "thoi_gian_phan_hoi": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                        }).eq("id", item['id']).execute()
-                                        st.success("✅ Đã lưu phản hồi thành công!")
-                                        st.rerun()
-                                    else:
-                                        st.error("Vui lòng nhập nội dung phản hồi.")
+                    for tb in ds_tb:
+                        with st.expander(f"📌 {tb['tieu_de']} (Ngày đăng: {tb.get('thoi_gian', '')[:16]})"):
+                            st.write(tb['noi_dung'])
+                            # Cho phép BGĐ chủ động xóa sớm nếu muốn
+                            if st.button("🗑️ Xóa thông báo này", key=f"del_tb_{tb['id']}"):
+                                supabase_client.table("thong_bao_chung").delete().eq("id", tb['id']).execute()
+                                st.success("Đã xóa thông báo!")
+                                st.rerun()
             except Exception as e:
-                st.error(f"⚠️ Lỗi tải danh sách ý kiến: {e}")
+                st.error(f"⚠️ Lỗi tải danh sách thông báo: {e}")
 
         st.write("---")
         if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
