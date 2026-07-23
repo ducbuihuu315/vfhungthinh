@@ -3,6 +3,7 @@ import openpyxl
 import pandas as pd
 import streamlit as st
 from datetime import datetime
+from supabase import create_client, Client
 
 # Tích hợp Google Sheets Realtime
 try:
@@ -191,66 +192,65 @@ def hien_thi_thong_tin_so_sanh(dong_xe):
         st.markdown("---")
 
 # ==============================================================================
-# 3. HÀM KẾT NỐI VÀ LƯU DỮ LIỆU
+# 3. HÀM KẾT NỐI VÀ LƯU DỮ LIỆU CSDL SUPABASE
 # ==============================================================================
-@st.cache_resource(ttl=600)
-def connect_gsheet():
-    """Hàm kết nối Google Sheet qua ID chính xác"""
-    if "gcp_service_account" in st.secrets and HAS_GSPREAD:
-        try:
-            scope = [
-                "https://www.googleapis.com/auth/spreadsheets",
-                "https://www.googleapis.com/auth/drive"
-            ]
-            creds_dict = dict(st.secrets["gcp_service_account"])
-            if "private_key" in creds_dict:
-                creds_dict["private_key"] = creds_dict["private_key"].replace("\\n", "\n")
-            
-            creds = Credentials.from_service_account_info(creds_dict, scopes=scope)
-            client = gspread.authorize(creds)
-            
-            SPREADSHEET_ID = "1wo7v0XEEdFABLMWHg80hchf4nwgnPoej9fzCTxOEs4o"
-            return client.open_by_key(SPREADSHEET_ID)
-        except Exception as e:
-            st.error(f"⚠️ Lỗi kết nối Google Sheets: {e}")
-            return None
-    return None
+@st.cache_resource
+def init_supabase() -> Client:
+    """Khởi tạo kết nối với CSDL Supabase"""
+    try:
+        url = st.secrets["supabase"]["SUPABASE_URL"]
+        key = st.secrets["supabase"]["SUPABASE_KEY"]
+        return create_client(url, key)
+    except Exception as e:
+        st.error(f"⚠️ Lỗi cấu hình Supabase Secrets: {e}")
+        return None
+
+supabase_client = init_supabase()
 
 def luu_du_lieu_realtime(loai, hang_du_lieu):
-    # 1. Lưu file Excel cục bộ dự phòng
-    try:
-        file_name = f"ThongKe_Showroom_{datetime.now().strftime('%Y-%m-%d')}.xlsx"
-        if os.path.exists(file_name):
-            wb = openpyxl.load_workbook(file_name)
-        else:
-            wb = openpyxl.Workbook()
-            if "Sheet" in wb.sheetnames:
-                wb.remove("Sheet")
-        
-        ws_title = "Khách Đến" if loai == "KHÁCH ĐẾN" else "Khách Về"
-        if ws_title not in wb.sheetnames:
-            ws = wb.create_sheet(ws_title)
-            if loai == "KHÁCH ĐẾN":
-                ws.append(["Thời gian", "Loại khách", "Mã NV", "Họ tên KH", "Dòng xe", "Mục đích sử dụng", "Màu sắc", "Nhu cầu vay", "SDT"])
-            else:
-                ws.append(["Thời gian", "Trạng thái cọc", "Mã NV", "Họ tên", "SDT", "CCCD", "Xe đã xem", "Tiền cọc"])
-        else:
-            ws = wb[ws_title]
-            
-        ws.append(hang_du_lieu)
-        wb.save(file_name)
-    except Exception as e:
-        print(f"Lỗi ghi Excel cục bộ: {e}")
+    """Hàm ghi dữ liệu trực tiếp vào Supabase & thu thập IP / Thiết bị"""
+    # 1. Lấy thông tin IP và Trình duyệt/Thiết bị
+    headers = st.context.headers
+    user_ip = headers.get("X-Forwarded-For", "N/A").split(',')[0].strip()
+    user_agent = headers.get("User-Agent", "N/A")
 
-    # 2. Đẩy dữ liệu Realtime lên Google Sheets
-    sheet = connect_gsheet()
-    if sheet:
-        try:
-            ws_target = "Khách Đến" if loai == "KHÁCH ĐẾN" else "Khách Về"
-            worksheet = sheet.worksheet(ws_target)
-            worksheet.append_row(hang_du_lieu)
-        except Exception as e:
-            st.warning(f"Lỗi đồng bộ Realtime: {e}")
+    if not supabase_client:
+        st.error("⚠️ Không thể kết nối tới CSDL Supabase!")
+        return
+
+    try:
+        if loai == "KHÁCH ĐẾN":
+            data_to_insert = {
+                "thoi_gian": hang_du_lieu[0],
+                "loai_khach": hang_du_lieu[1],
+                "ma_nv": hang_du_lieu[2],
+                "ho_ten_kh": hang_du_lieu[3],
+                "dong_xe": hang_du_lieu[4],
+                "muc_dich": hang_du_lieu[5],
+                "mau_sac": hang_du_lieu[6],
+                "nhu_cau_vay": hang_du_lieu[7],
+                "sdt": hang_du_lieu[8],
+                "ip_may": user_ip,
+                "user_agent": user_agent
+            }
+            supabase_client.table("khach_den").insert(data_to_insert).execute()
+        else:
+            data_to_insert = {
+                "thoi_gian": hang_du_lieu[0],
+                "trang_thai_coc": hang_du_lieu[1],
+                "ma_nv": hang_du_lieu[2],
+                "ho_ten": hang_du_lieu[3],
+                "sdt": hang_du_lieu[4],
+                "cccd": hang_du_lieu[5],
+                "xe_da_xem": hang_du_lieu[6],
+                "tien_coc": hang_du_lieu[7],
+                "ip_may": user_ip,
+                "user_agent": user_agent
+            }
+            supabase_client.table("khach_ve").insert(data_to_insert).execute()
+
+    except Exception as e:
+        st.error(f"⚠️ Lỗi khi đồng bộ dữ liệu: {e}")
 
 # ==============================================================================
 # 4. MÀN HÌNH CHÍNH (HOME)
