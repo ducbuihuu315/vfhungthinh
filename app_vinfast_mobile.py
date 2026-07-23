@@ -76,6 +76,11 @@ st.markdown(f"""
 # ==============================================================================
 # 2. KHỞI TẠO SESSION & DỮ LIỆU CÁC DÒNG XE & HÌNH ẢNH & THÔNG SỐ SO SÁNH
 # ==============================================================================
+if "user_info" not in st.session_state:
+    st.session_state.user_info = None  # Lưu thông tin người dùng sau khi đăng nhập
+
+if "page" not in st.session_state:
+    st.session_state.page = "login"   # Mặc định chưa đăng nhập sẽ ở trang 'login'
 if "page" not in st.session_state:
     st.session_state.page = "home"
 
