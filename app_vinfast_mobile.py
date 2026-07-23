@@ -12,6 +12,14 @@ try:
     HAS_GSPREAD = True
 except ImportError:
     HAS_GSPREAD = False
+
+# Khởi tạo trạng thái bộ nhớ Session
+if "user_info" not in st.session_state:
+    st.session_state.user_info = None
+
+if "page" not in st.session_state:
+    st.session_state.page = "login"
+    
 # ==============================================================================
 # MÀN HÌNH ĐĂNG NHẬP (LOGIN)
 # ==============================================================================
@@ -141,13 +149,6 @@ st.markdown(f"""
 # ==============================================================================
 # 2. KHỞI TẠO SESSION & DỮ LIỆU CÁC DÒNG XE & HÌNH ẢNH & THÔNG SỐ SO SÁNH
 # ==============================================================================
-if "user_info" not in st.session_state:
-    st.session_state.user_info = None  # Lưu thông tin người dùng sau khi đăng nhập
-
-if "page" not in st.session_state:
-    st.session_state.page = "login"   # Mặc định chưa đăng nhập sẽ ở trang 'login'
-    
-# ....2 hàm trên là Cập nhật Mã nguồn
 
 if "page" not in st.session_state:
     st.session_state.page = "home"
