@@ -13,79 +13,6 @@ try:
 except ImportError:
     HAS_GSPREAD = False
 
-# Khởi tạo trạng thái bộ nhớ Session
-if "user_info" not in st.session_state:
-    st.session_state.user_info = None
-
-if "page" not in st.session_state:
-    st.session_state.page = "login"
-    
-# ==============================================================================
-# MÀN HÌNH ĐĂNG NHẬP (LOGIN)
-# ==============================================================================
-if st.session_state.page == "login" or not st.session_state.user_info:
-    st.markdown("""
-        <div class="main-title">
-            🚘 VINFAST HƯNG THỊNH PHÁT<br>
-            <span style="font-size: 14px; color: #00d26a;">ĐĂNG NHẬP HỆ THỐNG</span>
-        </div>
-    """, unsafe_allow_html=True)
-
-    with st.form("form_login"):
-        username = st.text_input("Tên đăng nhập:")
-        password = st.text_input("Mật khẩu:", type="password")
-        btn_login = st.form_submit_button("🔑 ĐĂNG NHẬP", use_container_width=True, type="primary")
-
-        if btn_login:
-            if not username.strip() or not password.strip():
-                st.error("⚠️ Vui lòng nhập đầy đủ thông tin!")
-            else:
-                success, result = xac_thuc_dang_nhap(username.strip(), password.strip())
-                if success:
-                    st.session_state.user_info = result
-                    st.session_state.page = "home"
-                    st.success(f"Xin chào {result['ho_ten']}!")
-                    st.rerun()
-                else:
-                    st.error(result)
-
-# ...Tạo Màn Hình Đăng Nhập & Cập Nhật Điều Hướng Trang Chính==============================================================================
-# MÀN HÌNH CHÍNH (HOME)
-# ==============================================================================
-elif st.session_state.page == "home":
-    user = st.session_state.user_info
-    chuc_vu_text = "Giám Đốc Showroom" if user["chuc_vu"] == "giam_doc" else "Nhân Viên Showroom"
-
-    st.markdown(f"""
-        <div class="main-title">
-            🚘 VINFAST HƯNG THỊNH PHÁT<br>
-            <span style="font-size: 14px; color: #00d26a;">Xin chào: {user['ho_ten']} ({chuc_vu_text})</span>
-        </div>
-    """, unsafe_allow_html=True)
-
-    if st.button("1. 🚗 KHÁCH ĐẾN SHOWROOM", use_container_width=True, type="primary"):
-        set_page("khach_den")
-        st.rerun()
-
-    if st.button("2. 🚶 KHÁCH RỜI SHOWROOM", use_container_width=True):
-        set_page("khach_ve")
-        st.rerun()
-
-    if st.button("3. 📋 TRA CỨU BẢNG GIÁ / THÔNG SỐ XE", use_container_width=True):
-        set_page("tra_cuu")
-        st.rerun()
-
-    # PHÂN QUYỀN: Chỉ Giám đốc mới thấy mục Báo cáo
-    if user["chuc_vu"] == "giam_doc":
-        if st.button("4. 📊 BÁO CÁO THỐNG KÊ THEO NGÀY", use_container_width=True):
-            set_page("bao_cao")
-            st.rerun()
-
-    st.write("---")
-    if st.button("🚪 ĐĂNG XUẤT", use_container_width=True):
-        dang_xuat()
-
-
 # ==============================================================================
 # 1. CẤU HÌNH TRANG & MÀN HÌNH NỀN (BACKGROUND)
 # ==============================================================================
@@ -149,9 +76,11 @@ st.markdown(f"""
 # ==============================================================================
 # 2. KHỞI TẠO SESSION & DỮ LIỆU CÁC DÒNG XE & HÌNH ẢNH & THÔNG SỐ SO SÁNH
 # ==============================================================================
+if "user_info" not in st.session_state:
+    st.session_state.user_info = None
 
 if "page" not in st.session_state:
-    st.session_state.page = "home"
+    st.session_state.page = "login"
 
 def set_page(page_name):
     st.session_state.page = page_name
@@ -266,7 +195,7 @@ def hien_thi_thong_tin_so_sanh(dong_xe):
         st.markdown("---")
 
 # ==============================================================================
-# 3. HÀM KẾT NỐI VÀ LƯU DỮ LIỆU CSDL SUPABASE
+# 3. HÀM KẾT NỐI VÀ LƯU DỮ LIỆU CSDL SUPABASE & ĐĂNG NHẬP
 # ==============================================================================
 @st.cache_resource
 def init_supabase() -> Client:
@@ -325,10 +254,7 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
 
     except Exception as e:
         st.error(f"⚠️ Lỗi khi đồng bộ dữ liệu: {e}")
-        
-# ==============================================================================
-# HÀM XỬ LÝ ĐĂNG NHẬP & GIỚI HẠN THIẾT BỊ
-# ==============================================================================
+
 def xac_thuc_dang_nhap(username, password):
     """Hàm xác thực đăng nhập và khóa tài khoản theo thiết bị"""
     headers = st.context.headers
@@ -366,7 +292,6 @@ def xac_thuc_dang_nhap(username, password):
     except Exception as e:
         return False, f"⚠️ Lỗi xác thực: {e}"
 
-
 def dang_xuat():
     """Đăng xuất và xóa đăng ký thiết bị"""
     if st.session_state.user_info and supabase_client:
@@ -382,13 +307,49 @@ def dang_xuat():
     st.rerun()
 
 # ==============================================================================
-# 4. MÀN HÌNH CHÍNH (HOME)
+# 4. ĐIỀU HƯỚNG MÀN HÌNH (ROUTING)
 # ==============================================================================
-if st.session_state.page == "home":
+
+# ------------------------------------------------------------------------------
+# MÀN HÌNH ĐĂNG NHẬP (LOGIN)
+# ------------------------------------------------------------------------------
+if st.session_state.page == "login" or not st.session_state.user_info:
     st.markdown("""
         <div class="main-title">
+            🚘 VINFAST HƯNG THỊNH PHÁT<br>
+            <span style="font-size: 14px; color: #00d26a;">ĐĂNG NHẬP HỆ THỐNG</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    with st.form("form_login"):
+        username = st.text_input("Tên đăng nhập:")
+        password = st.text_input("Mật khẩu:", type="password")
+        btn_login = st.form_submit_button("🔑 ĐĂNG NHẬP", use_container_width=True, type="primary")
+
+        if btn_login:
+            if not username.strip() or not password.strip():
+                st.error("⚠️ Vui lòng nhập đầy đủ thông tin!")
+            else:
+                success, result = xac_thuc_dang_nhap(username.strip(), password.strip())
+                if success:
+                    st.session_state.user_info = result
+                    st.session_state.page = "home"
+                    st.success(f"Xin chào {result['ho_ten']}!")
+                    st.rerun()
+                else:
+                    st.error(result)
+
+# ------------------------------------------------------------------------------
+# MÀN HÌNH CHÍNH (HOME)
+# ------------------------------------------------------------------------------
+elif st.session_state.page == "home":
+    user = st.session_state.user_info
+    chuc_vu_text = "Giám Đốc Showroom" if user["chuc_vu"] == "giam_doc" else "Nhân Viên Showroom"
+
+    st.markdown(f"""
+        <div class="main-title">
             🚘 <a href="https://vinfasthungthinhphat.vn" target="_blank">VINFAST HƯNG THỊNH PHÁT</a><br>
-            <span style="font-size: 14px; color: #00d26a;">HỆ THỐNG QUẢN LÝ SHOWROOM</span>
+            <span style="font-size: 14px; color: #00d26a;">Xin chào: {user['ho_ten']} ({chuc_vu_text})</span>
         </div>
     """, unsafe_allow_html=True)
 
@@ -403,13 +364,20 @@ if st.session_state.page == "home":
     if st.button("3. 📋 TRA CỨU BẢNG GIÁ / THÔNG SỐ XE", use_container_width=True):
         set_page("tra_cuu")
         st.rerun()
-    if st.button("4. 📊 BÁO CÁO THỐNG KÊ THEO NGÀY", use_container_width=True):
-        set_page("bao_cao")
-        st.rerun()
 
-# ==============================================================================
-# 5. KHÂU KHÁCH ĐẾN SHOWROOM
-# ==============================================================================
+    # PHÂN QUYỀN: Chỉ Giám đốc mới thấy mục Báo cáo
+    if user["chuc_vu"] == "giam_doc":
+        if st.button("4. 📊 BÁO CÁO THỐNG KÊ THEO NGÀY", use_container_width=True):
+            set_page("bao_cao")
+            st.rerun()
+
+    st.write("---")
+    if st.button("🚪 ĐĂNG XUẤT", use_container_width=True):
+        dang_xuat()
+
+# ------------------------------------------------------------------------------
+# KHÂU KHÁCH ĐẾN SHOWROOM
+# ------------------------------------------------------------------------------
 elif st.session_state.page == "khach_den":
     st.markdown('<div class="sub-title">📥 THÔNG TIN KHÁCH ĐẾN SHOWROOM</div>', unsafe_allow_html=True)
 
@@ -456,9 +424,9 @@ elif st.session_state.page == "khach_den":
         set_page("home")
         st.rerun()
 
-# ==============================================================================
-# 6. KHÂU KHÁCH RỜI SHOWROOM
-# ==============================================================================
+# ------------------------------------------------------------------------------
+# KHÂU KHÁCH RỜI SHOWROOM
+# ------------------------------------------------------------------------------
 elif st.session_state.page == "khach_ve":
     st.markdown('<div class="sub-title">📤 THÔNG TIN KHÁCH RỜI SHOWROOM</div>', unsafe_allow_html=True)
 
@@ -505,9 +473,9 @@ elif st.session_state.page == "khach_ve":
         set_page("home")
         st.rerun()
 
-# ==============================================================================
-# 7. MÀN HÌNH TRA CỨU BẢNG GIÁ / THÔNG SỐ XE & XEM HÌNH ẢNH / SO SÁNH
-# ==============================================================================
+# ------------------------------------------------------------------------------
+# MÀN HÌNH TRA CỨU BẢNG GIÁ / THÔNG SỐ XE & XEM HÌNH ẢNH / SO SÁNH
+# ------------------------------------------------------------------------------
 elif st.session_state.page == "tra_cuu":
     st.markdown('<div class="sub-title">📋 TRA CỨU BẢNG GIÁ & THÔNG SỐ CÁC DÒNG XE</div>', unsafe_allow_html=True)
     
@@ -527,9 +495,10 @@ elif st.session_state.page == "tra_cuu":
     if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
         set_page("home")
         st.rerun()
-# ==============================================================================
-# 8. MÀN HÌNH BÁO CÁO THỐNG KÊ
-# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# MÀN HÌNH BÁO CÁO THỐNG KÊ
+# ------------------------------------------------------------------------------
 elif st.session_state.page == "bao_cao":
     st.markdown('<div class="sub-title">📊 BÁO CÁO THỐNG KÊ THEO NGÀY</div>', unsafe_allow_html=True)
 
