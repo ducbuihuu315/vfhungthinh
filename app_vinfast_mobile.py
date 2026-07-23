@@ -365,33 +365,18 @@ elif st.session_state.page == "home":
         set_page("tra_cuu")
         st.rerun()
 
-    # PHÂN QUYỀN: Chỉ Giám đốc mới thấy mục Báo cáo
-    if user["chuc_vu"] == "giam_doc":
-        if st.button("4. 📊 BÁO CÁO THỐNG KÊ THEO NGÀY", use_container_width=True):
-            set_page("bao_cao")
-            st.rerun()
-
-    st.write("---")
-    if st.button("🚪 ĐĂNG XUẤT", use_container_width=True):
-        dang_xuat()
-        
-# --- Nút gửi ý kiến chung ---
+   # --- Nút gửi ý kiến chung (cho tất cả người dùng) ---
     if st.button("💬 GỬI Ý KIẾN ĐÓNG GÓP", key="btn_home_gui_y_kien", use_container_width=True):
         set_page("gui_y_kien")
         st.rerun()
 
-    # --- PHÂN QUYỀN GIÁM ĐỐC ---
+    # --- PHÂN QUYỀN BAN GIÁM ĐỐC ---
     if user["chuc_vu"] == "giam_doc":
         if st.button("4. 📊 BÁO CÁO THỐNG KÊ THEO NGÀY", key="btn_home_bao_cao", use_container_width=True):
             set_page("bao_cao")
             st.rerun()
-            
+
         if st.button("5. 📬 QUẢN LÝ Ý KIẾN & PHẢN HỒI (BGĐ)", key="btn_home_quan_ly_yk", use_container_width=True, type="primary"):
-            set_page("quan_ly_y_kien")
-            st.rerun()
-            
-        # --- Chèn thêm nút Quản lý ý kiến dành riêng cho Giám đốc ---
-        if st.button("5. 📬 QUẢN LÝ Ý KIẾN & PHẢN HỒI (BGĐ)", use_container_width=True, type="primary"):
             set_page("quan_ly_y_kien")
             st.rerun()
 # ------------------------------------------------------------------------------
