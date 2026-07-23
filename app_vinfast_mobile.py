@@ -274,6 +274,9 @@ if st.session_state.page == "home":
     if st.button("3. 📋 TRA CỨU BẢNG GIÁ / THÔNG SỐ XE", use_container_width=True):
         set_page("tra_cuu")
         st.rerun()
+    if st.button("4. 📊 BÁO CÁO THỐNG KÊ THEO NGÀY", use_container_width=True):
+        set_page("bao_cao")
+        st.rerun()
 
 # ==============================================================================
 # 5. KHÂU KHÁCH ĐẾN SHOWROOM
@@ -391,6 +394,77 @@ elif st.session_state.page == "tra_cuu":
     df_display["Giá niêm yết (VND)"] = df_display["Giá niêm yết (VND)"].apply(lambda x: f"{x:,.0f} VNĐ")
     st.dataframe(df_display, use_container_width=True, hide_index=True)
     
+    st.write("---")
+    if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
+        set_page("home")
+        st.rerun()
+# ==============================================================================
+# 8. MÀN HÌNH BÁO CÁO THỐNG KÊ
+# ==============================================================================
+elif st.session_state.page == "bao_cao":
+    st.markdown('<div class="sub-title">📊 BÁO CÁO THỐNG KÊ THEO NGÀY</div>', unsafe_allow_html=True)
+
+    # Chọn ngày muốn xem báo cáo
+    ngay_chon = st.date_input("Chọn ngày xem báo cáo:", datetime.now())
+    str_ngay = ngay_chon.strftime("%Y-%m-%d")
+
+    if st.button("🔍 TRUY XUẤT DỮ LIỆU", type="primary", use_container_width=True):
+        if supabase_client:
+            try:
+                # 1. Truy vấn dữ liệu Khách Đến trong ngày
+                res_den = supabase_client.table("khach_den") \
+                    .select("*") \
+                    .gte("thoi_gian", f"{str_ngay} 00:00:00") \
+                    .lte("thoi_gian", f"{str_ngay} 23:59:59") \
+                    .execute()
+                data_den = res_den.data
+
+                # 2. Truy vấn dữ liệu Khách Về trong ngày
+                res_ve = supabase_client.table("khach_ve") \
+                    .select("*") \
+                    .gte("thoi_gian", f"{str_ngay} 00:00:00") \
+                    .lte("thoi_gian", f"{str_ngay} 23:59:59") \
+                    .execute()
+                data_ve = res_ve.data
+
+                # 3. Hiển thị các chỉ số tổng quan (KPIs)
+                col1, col2, col3 = st.columns(3)
+                col1.metric("📥 Tổng Khách Đến", f"{len(data_den)} lượt")
+                col2.metric("📤 Tổng Khách Về", f"{len(data_ve)} lượt")
+                
+                # Tính số lượng cọc
+                so_luong_coc = sum(1 for item in data_ve if item.get("trang_thai_coc") == "Đã đặt cọc")
+                col3.metric("💰 Số Lượng Cọc", f"{so_luong_coc} hợp đồng")
+
+                st.write("---")
+
+                # 4. Tìm dòng xe được quan tâm nhiều nhất
+                ds_xe = []
+                for item in data_den:
+                    if item.get("dong_xe"):
+                        # Lấy tên dòng xe chính
+                        xe_name = item["dong_xe"].split("(")[0].strip()
+                        ds_xe.append(xe_name)
+                
+                for item in data_ve:
+                    if item.get("xe_da_xem"):
+                        for xe in item["xe_da_xem"].split(","):
+                            ds_xe.append(xe.strip())
+
+                if ds_xe:
+                    df_xe = pd.Series(ds_xe).value_counts().reset_index()
+                    df_xe.columns = ["Dòng xe", "Số lượt quan tâm"]
+                    
+                    st.markdown(f"🏆 **Dòng xe hot nhất ngày {str_ngay}:** `{df_xe.iloc[0]['Dòng xe']}` ({df_xe.iloc[0]['Số lượt quan tâm']} lượt)")
+                    st.dataframe(df_xe, use_container_width=True, hide_index=True)
+                else:
+                    st.info("Chưa có thông tin xe được chọn trong ngày này.")
+
+            except Exception as e:
+                st.error(f"Lỗi khi tải báo cáo: {e}")
+        else:
+            st.error("Chưa kết nối CSDL Supabase.")
+
     st.write("---")
     if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
         set_page("home")
