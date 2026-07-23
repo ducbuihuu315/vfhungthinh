@@ -466,9 +466,7 @@ elif st.session_state.page == "home":
         if st.button("6. 💬 PHẢN HỒI Ý KIẾN KHÁCH HÀNG & NHÂN VIÊN", key="btn_home_quan_ly_yk", use_container_width=True):
             set_page("quan_ly_y_kien")
             st.rerun()
-    st.write("---")
-        if st.button("🚪 ĐĂNG XUẤT", key="btn_logout_home", use_container_width=True):
-            dang_xuat()
+   
 # ------------------------------------------------------------------------------
 # KHÂU KHÁCH ĐẾN SHOWROOM
 # ------------------------------------------------------------------------------
