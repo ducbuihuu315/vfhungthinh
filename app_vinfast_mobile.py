@@ -355,6 +355,13 @@ if st.session_state.get("logged_in") and st.session_state.get("user_info"):
         chuc_vu_nhap = st.selectbox("Chọn Chức vụ / Bộ phận:", ["Cố vấn dịch vụ", "Kỹ thuật viên", "Tư vấn bán hàng", "Thu ngân / Kế toán", "Hành chính / Bãi xe", "Khác"])
         ho_ten_nhap = st.text_input("Họ và tên nhân viên:", value=user.get("ho_ten", ""))
 
+        col_user1, col_user2 = st.columns([3, 1])
+    with col_user1:
+        st.write(f"👤 **{user.get('ho_ten', '')}** ({chuc_vu_text})")
+    with col_user2:
+        if st.button("🚪 Đăng xuất", key="btn_quick_logout"):
+            dang_xuat()
+
         if st.button("💾 XÁC NHẬN CHỨC VỤ & BẮT ĐẦU", type="primary", use_container_width=True):
             if not ho_ten_nhap.strip():
                 st.error("Vui lòng nhập Họ tên!")
@@ -385,7 +392,10 @@ if not st.session_state.get("logged_in") or st.session_state.page == "login":
             <span style="font-size: 14px; color: #00d26a;">ĐĂNG NHẬP HỆ THỐNG</span>
         </div>
     """, unsafe_allow_html=True)
-
+st.write("---")
+    if st.button("🚪 ĐĂNG XUẤT", key="btn_logout_home", use_container_width=True):
+        dang_xuat()
+        
     with st.form("form_login"):
         username = st.text_input("Tên đăng nhập:")
         password = st.text_input("Mật khẩu:", type="password")
