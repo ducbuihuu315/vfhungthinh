@@ -349,18 +349,23 @@ check_single_device_session()
 # 4. KHAI BÁO THÔNG TIN LẦN ĐẦU CHO NHÂN VIÊN
 # ==============================================================================
 if st.session_state.get("logged_in") and st.session_state.get("user_info"):
-    user = st.session_state.user_info
-    if user.get("lan_dang_nhap_dau", False) and user.get("chuc_vu") != "giam_doc":
-        st.warning("👋 Dành cho lần đăng nhập đầu tiên: Vui lòng khai báo Chức vụ / Bộ phận của bạn. (Chức vụ này sẽ cố định cho các lần sau)")
-        chuc_vu_nhap = st.selectbox("Chọn Chức vụ / Bộ phận:", ["Cố vấn dịch vụ", "Kỹ thuật viên", "Tư vấn bán hàng", "Thu ngân / Kế toán", "Hành chính / Bãi xe", "Khác"])
-        ho_ten_nhap = st.text_input("Họ và tên nhân viên:", value=user.get("ho_ten", ""))
+        user = st.session_state.user_info
+        
+        # Thêm 2 dòng này để định nghĩa biến chuc_vu_text trước khi sử dụng
+        chuc_vu_val = user.get("chuc_vu", "")
+        chuc_vu_text = "Giám Đốc Showroom" if chuc_vu_val == "giam_doc" else (chuc_vu_val if chuc_vu_val else "Nhân Viên Showroom")
+
+        if user.get("lan_dang_nhap_dau", False) and user.get("chuc_vu") != "giam_doc":
+            st.warning("⚠️ Dành cho lần đăng nhập đầu tiên: Vui lòng khai báo Chức vụ / Bộ phận của bạn.")
+            chuc_vu_nhap = st.selectbox("Chọn Chức vụ / Bộ phận:", ["Cố vấn dịch vụ", "Kỹ thuật viên", "Tư vấn bán hàng", "Lễ tân", "Bảo vệ", "Tài chính / Kế toán", "Khác"])
+            ho_ten_nhap = st.text_input("Họ và tên nhân viên:", value=user.get("ho_ten", ""))
 
         col_user1, col_user2 = st.columns([3, 1])
-    with col_user1:
-        st.write(f"👤 **{user.get('ho_ten', '')}** ({chuc_vu_text})")
-    with col_user2:
-        if st.button("🚪 Đăng xuất", key="btn_quick_logout"):
-            dang_xuat()
+        with col_user1:
+            st.write(f"👤 **{user.get('ho_ten', '')}** ({chuc_vu_text})")
+        with col_user2:
+            if st.button("🚪 Đăng xuất", key="btn_quick_logout"):
+                dang_xuat()
 
         if st.button("💾 XÁC NHẬN CHỨC VỤ & BẮT ĐẦU", type="primary", use_container_width=True):
             if not ho_ten_nhap.strip():
