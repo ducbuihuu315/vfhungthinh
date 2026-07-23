@@ -325,16 +325,17 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
     except Exception as e:
         st.error(f"⚠️ Lỗi khi đồng bộ dữ liệu: {e}")
         
-    #...Thêm Hàm Xử Lý Đăng Nhập & Giới Hạn Thiết Bị
-    
-    def xac_thuc_dang_nhap(username, password):
-        """Hàm xác thực đăng nhập và khóa tài khoản theo thiết bị"""
-        headers = st.context.headers
-        # Lấy thông tin đặc xưng trình duyệt/máy làm ID thiết bị (device_id)
-        device_id = headers.get("User-Agent", "N/A") + "_" + headers.get("X-Forwarded-For", "N/A").split(',')[0].strip()
+# ==============================================================================
+# HÀM XỬ LÝ ĐĂNG NHẬP & GIỚI HẠN THIẾT BỊ
+# ==============================================================================
+def xac_thuc_dang_nhap(username, password):
+    """Hàm xác thực đăng nhập và khóa tài khoản theo thiết bị"""
+    headers = st.context.headers
+    # Lấy thông tin đặc xưng trình duyệt/máy làm ID thiết bị (device_id)
+    device_id = headers.get("User-Agent", "N/A") + "_" + headers.get("X-Forwarded-For", "N/A").split(',')[0].strip()
 
-        if not supabase_client:
-            return False, "⚠️ Không kết nối được CSDL!"
+    if not supabase_client:
+        return False, "⚠️ Không kết nối được CSDL!"
 
     try:
         # Kiểm tra tên đăng nhập & mật khẩu
@@ -363,6 +364,7 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
         return True, user
     except Exception as e:
         return False, f"⚠️ Lỗi xác thực: {e}"
+
 
 def dang_xuat():
     """Đăng xuất và xóa đăng ký thiết bị"""
