@@ -316,7 +316,7 @@ def check_single_device_session():
 check_single_device_session()
 
 if not st.session_state.get("logged_in"):
-    # --- MÀN HÌNH ĐĂNG NHẬP ---
+   # --- MÀN HÌNH ĐĂNG NHẬP ---
     st.markdown('<div class="main-title">🚗 KHÁCH HÀNG / NHÂN VIÊN ĐĂNG NHẬP</div>', unsafe_allow_html=True)
     username = st.text_input("Tên đăng nhập:")
     password = st.text_input("Mật khẩu:", type="password")
@@ -329,6 +329,8 @@ if not st.session_state.get("logged_in"):
             st.rerun()
         else:
             st.error(result)
+
+# --- TRƯỜNG HỢP ĐÃ ĐĂNG NHẬP THÀNH CÔNG ---
 else:
     user = st.session_state.user_info
 
