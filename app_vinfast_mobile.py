@@ -392,7 +392,7 @@ if not st.session_state.get("logged_in") or st.session_state.page == "login":
             <span style="font-size: 14px; color: #00d26a;">ĐĂNG NHẬP HỆ THỐNG</span>
         </div>
     """, unsafe_allow_html=True)
-st.write("---")
+    st.write("---")
     if st.button("🚪 ĐĂNG XUẤT", key="btn_logout_home", use_container_width=True):
         dang_xuat()
         
