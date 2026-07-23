@@ -351,37 +351,36 @@ check_single_device_session()
 if st.session_state.get("logged_in") and st.session_state.get("user_info"):
         user = st.session_state.user_info
         
-        # Thêm 2 dòng này để định nghĩa biến chuc_vu_text trước khi sử dụng
+        # Khởi tạo giá trị mặc định cho biến chuc_vu_text và ho_ten_nhap
         chuc_vu_val = user.get("chuc_vu", "")
         chuc_vu_text = "Giám Đốc Showroom" if chuc_vu_val == "giam_doc" else (chuc_vu_val if chuc_vu_val else "Nhân Viên Showroom")
+        ho_ten_nhap = user.get("ho_ten", "")
+        chuc_vu_nhap = chuc_vu_val
 
+        # Kiểm tra lần đăng nhập đầu tiên đối với nhân viên
         if user.get("lan_dang_nhap_dau", False) and user.get("chuc_vu") != "giam_doc":
             st.warning("⚠️ Dành cho lần đăng nhập đầu tiên: Vui lòng khai báo Chức vụ / Bộ phận của bạn.")
             chuc_vu_nhap = st.selectbox("Chọn Chức vụ / Bộ phận:", ["Cố vấn dịch vụ", "Kỹ thuật viên", "Tư vấn bán hàng", "Lễ tân", "Bảo vệ", "Tài chính / Kế toán", "Khác"])
             ho_ten_nhap = st.text_input("Họ và tên nhân viên:", value=user.get("ho_ten", ""))
 
-        col_user1, col_user2 = st.columns([3, 1])
-        with col_user1:
-            st.write(f"👤 **{user.get('ho_ten', '')}** ({chuc_vu_text})")
-        with col_user2:
-            if st.button("🚪 Đăng xuất", key="btn_quick_logout"):
-                dang_xuat()
-
-        if st.button("💾 XÁC NHẬN CHỨC VỤ & BẮT ĐẦU", type="primary", use_container_width=True):
-            if not ho_ten_nhap.strip():
-                st.error("Vui lòng nhập Họ tên!")
-            else:
-                supabase_client.table("tai_khoan").update({
-                    "ho_ten": ho_ten_nhap.strip(),
-                    "chuc_vu": chuc_vu_nhap,
-                    "lan_dang_nhap_dau": False
-                }).eq("ten_dang_nhap", user["ten_dang_nhap"]).execute()
-
-                st.session_state.user_info["ho_ten"] = ho_ten_nhap.strip()
-                st.session_state.user_info["chuc_vu"] = chuc_vu_nhap
-                st.session_state.user_info["lan_dang_nhap_dau"] = False
-                st.success("✅ Cập nhật thông tin thành công!")
-                st.rerun()
+            if st.button("💾 CẬP NHẬT THÔNG TIN", type="primary", use_container_width=True):
+                if not ho_ten_nhap.strip():
+                    st.error("⚠️ Vui lòng nhập họ và tên!")
+                else:
+                    try:
+                        supabase_client.table("tai_khoan").update({
+                            "ho_ten": ho_ten_nhap.strip(),
+                            "chuc_vu": chuc_vu_nhap,
+                            "lan_dang_nhap_dau": False
+                        }).eq("ten_dang_nhap", user["ten_dang_nhap"]).execute()
+                        
+                        st.session_state.user_info["ho_ten"] = ho_ten_nhap.strip()
+                        st.session_state.user_info["chuc_vu"] = chuc_vu_nhap
+                        st.session_state.user_info["lan_dang_nhap_dau"] = False
+                        st.success("✅ Cập nhật thông tin thành công!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"⚠️ Lỗi cập nhật: {e}")
 
 # ==============================================================================
 # 5. ĐIỀU HƯỚNG MÀN HÌNH (ROUTING)
@@ -422,7 +421,8 @@ if not st.session_state.get("logged_in") or st.session_state.page == "login":
 # ------------------------------------------------------------------------------
 elif st.session_state.page == "home":
     user = st.session_state.user_info
-    chuc_vu_text = "Giám Đốc Showroom" if user.get("chuc_vu") == "giam_doc" else "Nhân Viên Showroom"
+    chuc_vu_val = user.get("chuc_vu", "")
+    chuc_vu_text = "Giám Đốc Showroom" if chuc_vu_val == "giam_doc" else (chuc_vu_val if chuc_vu_val else "Nhân Viên Showroom")
 
     st.markdown(f"""
         <div class="main-title">
@@ -431,17 +431,39 @@ elif st.session_state.page == "home":
         </div>
     """, unsafe_allow_html=True)
 
-    # Hiển thị thông báo chung từ Ban Giám Đốc
-    try:
-        res_tb = supabase_client.table("thong_bao_chung").select("*").order("id", desc=True).limit(3).execute()
-        if res_tb.data:
-            st.markdown("### 📢 THÔNG BÁO MỚI TỪ BAN GIÁM ĐỐC")
-            for tb in res_tb.data:
-                with st.info(f"📌 **{tb['tieu_de']}** ({tb['thoi_gian'][:10]})\n\n{tb['noi_dung']}"):
-                    pass
-    except Exception:
-        pass
+    # 1. PHẦN HIỂN THỊ THÔNG BÁO TỪ BAN GIÁM ĐỐC (TỰ ĐỘNG LỌC 7 NGÀY)
+    if supabase_client:
+        try:
+            res_tb = supabase_client.table("thong_bao_chung").select("*").order("id", desc=True).limit(5).execute()
+            ds_tb = res_tb.data or []
+            if ds_tb:
+                st.markdown("### 📢 BAN GIÁM ĐỐC THÔNG BÁO")
+                for tb in ds_tb:
+                    st.info(f"📌 **{tb['tieu_de']}** ({tb.get('thoi_gian', '')[:16]})\n\n{tb['noi_dung']}")
+        except Exception as e:
+            pass
 
+    # 2. PHẦN HIỂN THỊ PHẢN HỒI CỦA BGĐ CHO Ý KIẾN CỦA TÀI KHOẢN NÀY
+    if supabase_client and user.get("ten_dang_nhap"):
+        try:
+            res_yk = supabase_client.table("y_kien_dong_gop") \
+                .select("*") \
+                .eq("nguoi_gui", user.get("ho_ten", "")) \
+                .not_.is_("phan_hoi", "null") \
+                .order("id", desc=True).execute()
+            ds_phan_hoi = res_yk.data or []
+            if ds_phan_hoi:
+                st.markdown("### 💬 PHẢN HỒI TỪ BAN GIÁM ĐỐC CHO Ý KIẾN CỦA BẠN")
+                for yk in ds_phan_hoi:
+                    with st.expander(f"📩 Ý kiến: '{yk['noi_dung'][:30]}...' - BGĐ đã trả lời"):
+                        st.write(f"**Nội dung gửi:** {yk['noi_dung']}")
+                        st.success(f"💬 **Trả lời từ BGĐ ({yk.get('thoi_gian_phan_hoi', '')[:16]}):**\n\n{yk['phan_hoi']}")
+        except Exception:
+            pass
+
+    st.write("---")
+
+    # DÁCH SÁCH NÚT CHỨC NĂNG
     if st.button("1. 🚗 KHÁCH ĐẾN SHOWROOM", use_container_width=True, type="primary"):
         set_page("khach_den")
         st.rerun()
@@ -458,7 +480,7 @@ elif st.session_state.page == "home":
         set_page("gui_y_kien")
         st.rerun()
 
-   # PHÂN QUYỀN BAN GIÁM ĐỐC
+    # PHÂN QUYỀN BAN GIÁM ĐỐC
     if user.get("chuc_vu") == "giam_doc":
         if st.button("4. 📊 BÁO CÁO THỐNG KÊ THEO NGÀY", key="btn_home_bao_cao", use_container_width=True):
             set_page("bao_cao")
@@ -471,6 +493,10 @@ elif st.session_state.page == "home":
         if st.button("6. 💬 PHẢN HỒI Ý KIẾN KHÁCH HÀNG & NHÂN VIÊN", key="btn_home_quan_ly_yk", use_container_width=True):
             set_page("quan_ly_y_kien")
             st.rerun()
+
+    st.write("---")
+    if st.button("🚪 ĐĂNG XUẤT", key="btn_logout_home", use_container_width=True):
+        dang_xuat()
    
 # ------------------------------------------------------------------------------
 # KHÂU KHÁCH ĐẾN SHOWROOM
