@@ -75,7 +75,137 @@ st.markdown(f"""
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. KHỞI TẠO SESSION & DỮ LIỆU CÁC DÒNG XE & HÌNH ẢNH & THÔNG SỐ SO SÁNH
+# 2. KHỞI TẠO CSDL SUPABASE & HÀM BỔ TRỢ
+# ==============================================================================
+@st.cache_resource
+def init_supabase() -> Client:
+    """Khởi tạo kết nối với CSDL Supabase"""
+    try:
+        url = st.secrets["supabase"]["SUPABASE_URL"]
+        key = st.secrets["supabase"]["SUPABASE_KEY"]
+        return create_client(url, key)
+    except Exception as e:
+        st.error(f"⚠️ Lỗi cấu hình Supabase Secrets: {e}")
+        return None
+
+supabase_client = init_supabase()
+
+def luu_du_lieu_realtime(loai, hang_du_lieu):
+    """Hàm ghi dữ liệu trực tiếp vào Supabase & thu thập IP / Thiết bị"""
+    headers = st.context.headers
+    user_ip = headers.get("X-Forwarded-For", "N/A").split(',')[0].strip()
+    user_agent = headers.get("User-Agent", "N/A")
+
+    if not supabase_client:
+        st.error("⚠️ Không thể kết nối tới CSDL Supabase!")
+        return
+
+    try:
+        if loai == "KHÁCH ĐẾN":
+            data_to_insert = {
+                "thoi_gian": hang_du_lieu[0],
+                "loai_khach": hang_du_lieu[1],
+                "ma_nv": hang_du_lieu[2],
+                "ho_ten_kh": hang_du_lieu[3],
+                "dong_xe": hang_du_lieu[4],
+                "muc_dich": hang_du_lieu[5],
+                "mau_sac": hang_du_lieu[6],
+                "nhu_cau_vay": hang_du_lieu[7],
+                "sdt": hang_du_lieu[8],
+                "ip_may": user_ip,
+                "user_agent": user_agent
+            }
+            supabase_client.table("khach_den").insert(data_to_insert).execute()
+        else:
+            data_to_insert = {
+                "thoi_gian": hang_du_lieu[0],
+                "trang_thai_coc": hang_du_lieu[1],
+                "ma_nv": hang_du_lieu[2],
+                "ho_ten": hang_du_lieu[3],
+                "sdt": hang_du_lieu[4],
+                "cccd": hang_du_lieu[5],
+                "xe_da_xem": hang_du_lieu[6],
+                "tien_coc": hang_du_lieu[7],
+                "ip_may": user_ip,
+                "user_agent": user_agent
+            }
+            supabase_client.table("khach_ve").insert(data_to_insert).execute()
+
+    except Exception as e:
+        st.error(f"⚠️ Lỗi khi đồng bộ dữ liệu: {e}")
+
+def xac_thuc_dang_nhap(username, password):
+    """Xác thực đăng nhập & Cấp Session ID mới (Auto Logout thiết bị cũ)"""
+    if not supabase_client:
+        return False, "⚠️ Không kết nối được CSDL!"
+
+    try:
+        res = supabase_client.table("tai_khoan").select("*").eq("ten_dang_nhap", username).eq("mat_khau", password).execute()
+
+        if not res.data:
+            return False, "❌ Sai tên đăng nhập hoặc mật khẩu!"
+
+        user = res.data[0]
+
+        # Kiểm tra xem tài khoản có bị Giám đốc khóa không
+        if user.get("bi_khoa", False):
+            return False, "🚫 Tài khoản của bạn đã bị Ban Giám Đốc khóa!"
+
+        # Tạo Session ID ngẫu nhiên cho thiết bị MỚI NÀY
+        new_session_id = str(uuid.uuid4())
+        
+        # Cập nhật Session ID mới vào Supabase (Thiết bị cũ sẽ bị vô hiệu hóa)
+        supabase_client.table("tai_khoan").update({
+            "session_id": new_session_id,
+            "last_active": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }).eq("ten_dang_nhap", username).execute()
+
+        user["session_id"] = new_session_id
+        return True, user
+    except Exception as e:
+        return False, f"⚠️ Lỗi đăng nhập: {e}"
+
+def check_single_device_session():
+    """Kiểm tra liên tục: Nếu đăng nhập ở thiết bị 2 -> Thiết bị 1 tự out"""
+    if st.session_state.get("logged_in") and st.session_state.get("user_info"):
+        user_info = st.session_state.user_info
+        try:
+            res = supabase_client.table("tai_khoan").select("session_id, bi_khoa").eq("ten_dang_nhap", user_info["ten_dang_nhap"]).execute()
+            if res.data:
+                current_db_session = res.data[0].get("session_id")
+                is_locked = res.data[0].get("bi_khoa", False)
+
+                if is_locked:
+                    st.session_state.logged_in = False
+                    st.session_state.user_info = None
+                    st.error("🚫 Tài khoản của bạn đã bị khóa bởi Ban Giám Đốc!")
+                    st.rerun()
+
+                if current_db_session and current_db_session != user_info.get("session_id"):
+                    st.session_state.logged_in = False
+                    st.session_state.user_info = None
+                    st.warning("⚠️ Tài khoản đã được đăng nhập ở một thiết bị khác! Bạn đã bị tự động đăng xuất.")
+                    st.rerun()
+        except Exception:
+            pass
+
+def dang_xuat():
+    """Đăng xuất và xóa đăng ký thiết bị"""
+    if st.session_state.user_info and supabase_client:
+        try:
+            supabase_client.table("tai_khoan") \
+                .update({"device_id": None}) \
+                .eq("ten_dang_nhap", st.session_state.user_info["ten_dang_nhap"]) \
+                .execute()
+        except Exception:
+            pass
+    st.session_state.user_info = None
+    st.session_state.logged_in = False
+    st.session_state.page = "login"
+    st.rerun()
+
+# ==============================================================================
+# 3. KHỞI TẠO SESSION & DỮ LIỆU DÒNG XE / HÌNH ẢNH / THÔNG SỐ SO SÁNH
 # ==============================================================================
 if "user_info" not in st.session_state:
     st.session_state.user_info = None
@@ -195,193 +325,43 @@ def hien_thi_thong_tin_so_sanh(dong_xe):
         st.markdown(f"✨ **Tính năng nổi bật:** {row['Tính năng nổi bật']}")
         st.markdown("---")
 
-# ==============================================================================
-# 3. HÀM KẾT NỐI VÀ LƯU DỮ LIỆU CSDL SUPABASE & ĐĂNG NHẬP
-# ==============================================================================
-@st.cache_resource
-def init_supabase() -> Client:
-    """Khởi tạo kết nối với CSDL Supabase"""
-    try:
-        url = st.secrets["supabase"]["SUPABASE_URL"]
-        key = st.secrets["supabase"]["SUPABASE_KEY"]
-        return create_client(url, key)
-    except Exception as e:
-        st.error(f"⚠️ Lỗi cấu hình Supabase Secrets: {e}")
-        return None
-
-supabase_client = init_supabase()
-
-def luu_du_lieu_realtime(loai, hang_du_lieu):
-    """Hàm ghi dữ liệu trực tiếp vào Supabase & thu thập IP / Thiết bị"""
-    # 1. Lấy thông tin IP và Trình duyệt/Thiết bị
-    headers = st.context.headers
-    user_ip = headers.get("X-Forwarded-For", "N/A").split(',')[0].strip()
-    user_agent = headers.get("User-Agent", "N/A")
-
-    if not supabase_client:
-        st.error("⚠️ Không thể kết nối tới CSDL Supabase!")
-        return
-
-    try:
-        if loai == "KHÁCH ĐẾN":
-            data_to_insert = {
-                "thoi_gian": hang_du_lieu[0],
-                "loai_khach": hang_du_lieu[1],
-                "ma_nv": hang_du_lieu[2],
-                "ho_ten_kh": hang_du_lieu[3],
-                "dong_xe": hang_du_lieu[4],
-                "muc_dich": hang_du_lieu[5],
-                "mau_sac": hang_du_lieu[6],
-                "nhu_cau_vay": hang_du_lieu[7],
-                "sdt": hang_du_lieu[8],
-                "ip_may": user_ip,
-                "user_agent": user_agent
-            }
-            supabase_client.table("khach_den").insert(data_to_insert).execute()
-        else:
-            data_to_insert = {
-                "thoi_gian": hang_du_lieu[0],
-                "trang_thai_coc": hang_du_lieu[1],
-                "ma_nv": hang_du_lieu[2],
-                "ho_ten": hang_du_lieu[3],
-                "sdt": hang_du_lieu[4],
-                "cccd": hang_du_lieu[5],
-                "xe_da_xem": hang_du_lieu[6],
-                "tien_coc": hang_du_lieu[7],
-                "ip_may": user_ip,
-                "user_agent": user_agent
-            }
-            supabase_client.table("khach_ve").insert(data_to_insert).execute()
-
-    except Exception as e:
-        st.error(f"⚠️ Lỗi khi đồng bộ dữ liệu: {e}")
-
-def xac_thuc_dang_nhap(username, password):
-    """Xác thực đăng nhập & Cấp Session ID mới (Auto Logout thiết bị cũ)"""
-    if not supabase_client:
-        return False, "⚠️ Không kết nối được CSDL!"
-
-    try:
-        res = supabase_client.table("tai_khoan").select("*").eq("ten_dang_nhap", username).eq("mat_khau", password).execute()
-
-        if not res.data:
-            return False, "❌ Sai tên đăng nhập hoặc mật khẩu!"
-
-        user = res.data[0]
-
-        # Kiểm tra xem tài khoản có bị Giám đốc khóa không
-        if user.get("bi_khoa", False):
-            return False, "🚫 Tài khoản của bạn đã bị Ban Giám Đốc khóa!"
-
-        # Tạo Session ID ngẫu nhiên cho thiết bị MỚI NÀY
-        new_session_id = str(uuid.uuid4())
-        
-        # Cập nhật Session ID mới vào Supabase (Thiết bị cũ sẽ bị vô hiệu hóa)
-        supabase_client.table("tai_khoan").update({
-            "session_id": new_session_id,
-            "last_active": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }).eq("ten_dang_nhap", username).execute()
-
-        user["session_id"] = new_session_id
-        return True, user
-    except Exception as e:
-        return False, f"⚠️ Lỗi đăng nhập: {e}"
-
-def check_single_device_session():
-    """Kiểm tra liên tục: Nếu đăng nhập ở thiết bị 2 -> Thiết bị 1 tự out"""
-    if st.session_state.get("logged_in") and st.session_state.get("user_info"):
-        user_info = st.session_state.user_info
-        try:
-            res = supabase_client.table("tai_khoan").select("session_id, bi_khoa").eq("ten_dang_nhap", user_info["ten_dang_nhap"]).execute()
-            if res.data:
-                current_db_session = res.data[0].get("session_id")
-                is_locked = res.data[0].get("bi_khoa", False)
-
-                if is_locked:
-                    st.session_state.logged_in = False
-                    st.session_state.user_info = None
-                    st.error("🚫 Tài khoản của bạn đã bị khóa bởi Ban Giám Đốc!")
-                    st.rerun()
-
-                # Nếu Session ID trên DB khác Session ID hiện tại -> Đã đăng nhập ở thiết bị 2
-                if current_db_session and current_db_session != user_info.get("session_id"):
-                    st.session_state.logged_in = False
-                    st.session_state.user_info = None
-                    st.warning("⚠️ Tài khoản đã được đăng nhập ở một thiết bị khác! Bạn đã bị tự động đăng xuất.")
-                    st.rerun()
-        except Exception:
-            pass
-
-# Gọi kiểm tra phiên làm việc đơn thiết bị đầu mỗi lượt render
+# Kiểm tra phiên làm việc đơn thiết bị
 check_single_device_session()
 
-if not st.session_state.get("logged_in"):
-   # --- MÀN HÌNH ĐĂNG NHẬP ---
-    st.markdown('<div class="main-title">🚗 KHÁCH HÀNG / NHÂN VIÊN ĐĂNG NHẬP</div>', unsafe_allow_html=True)
-    username = st.text_input("Tên đăng nhập:")
-    password = st.text_input("Mật khẩu:", type="password")
-
-    if st.button("🔑 ĐĂNG NHẬP", use_container_width=True, type="primary"):
-        ok, result = xac_thuc_dang_nhap(username, password)
-        if ok:
-            st.session_state.logged_in = True
-            st.session_state.user_info = result
-            st.rerun()
-        else:
-            st.error(result)
-
-# --- TRƯỜNG HỢP ĐÃ ĐĂNG NHẬP THÀNH CÔNG ---
-else:
+# ==============================================================================
+# 4. KHAI BÁO THÔNG TIN LẦN ĐẦU CHO NHÂN VIÊN
+# ==============================================================================
+if st.session_state.get("logged_in") and st.session_state.get("user_info"):
     user = st.session_state.user_info
+    if user.get("lan_dang_nhap_dau", False) and user.get("chuc_vu") != "giam_doc":
+        st.warning("👋 Dành cho lần đăng nhập đầu tiên: Vui lòng khai báo Chức vụ / Bộ phận của bạn. (Chức vụ này sẽ cố định cho các lần sau)")
+        chuc_vu_nhap = st.selectbox("Chọn Chức vụ / Bộ phận:", ["Cố vấn dịch vụ", "Kỹ thuật viên", "Tư vấn bán hàng", "Thu ngân / Kế toán", "Hành chính / Bãi xe", "Khác"])
+        ho_ten_nhap = st.text_input("Họ và tên nhân viên:", value=user.get("ho_ten", ""))
 
-# --- KIỂM TRA KHAI BÁO CHỨC VỤ LẦN ĐẦU CHO NHÂN VIÊN ---
-if user.get("lan_dang_nhap_dau", False) and user.get("chuc_vu") != "giam_doc":
-    st.warning("👋 Dành cho lần đăng nhập đầu tiên: Vui lòng khai báo Chức vụ / Bộ phận của bạn. (Chức vụ này sẽ cố định cho các lần sau)")
-    chuc_vu_nhap = st.selectbox("Chọn Chức vụ / Bộ phận:", ["Cố vấn dịch vụ", "Kỹ thuật viên", "Tư vấn bán hàng", "Thu ngân / Kế toán", "Hành chính / Bãi xe", "Khác"])
-    ho_ten_nhap = st.text_input("Họ và tên nhân viên:", value=user.get("ho_ten", ""))
+        if st.button("💾 XÁC NHẬN CHỨC VỤ & BẮT ĐẦU", type="primary", use_container_width=True):
+            if not ho_ten_nhap.strip():
+                st.error("Vui lòng nhập Họ tên!")
+            else:
+                supabase_client.table("tai_khoan").update({
+                    "ho_ten": ho_ten_nhap.strip(),
+                    "chuc_vu": chuc_vu_nhap,
+                    "lan_dang_nhap_dau": False
+                }).eq("ten_dang_nhap", user["ten_dang_nhap"]).execute()
 
-    if st.button("💾 XÁC NHẬN CHỨC VỤ & BẮT ĐẦU", type="primary", use_container_width=True):
-        if not ho_ten_nhap.strip():
-            st.error("Vui lòng nhập Họ tên!")
-        else:
-            # Cập nhật cố định và khóa đổi chức vụ lần sau
-            supabase_client.table("tai_khoan").update({
-                "ho_ten": ho_ten_nhap.strip(),
-                "chuc_vu": chuc_vu_nhap,
-                "lan_dang_nhap_dau": False
-            }).eq("ten_dang_nhap", user["ten_dang_nhap"]).execute()
-
-            st.session_state.user_info["ho_ten"] = ho_ten_nhap.strip()
-            st.session_state.user_info["chuc_vu"] = chuc_vu_nhap
-            st.session_state.user_info["lan_dang_nhap_dau"] = False
-            st.success("✅ Cập nhật thông tin thành công!")
-            st.rerun()
-else:
-    # Trường hợp đã khai báo thông tin hoặc không phải lần đăng nhập đầu
-    pass
-
-def dang_xuat():
-    """Đăng xuất và xóa đăng ký thiết bị"""
-    if st.session_state.user_info and supabase_client:
-        try:
-            supabase_client.table("tai_khoan") \
-                .update({"device_id": None}) \
-                .eq("ten_dang_nhap", st.session_state.user_info["ten_dang_nhap"]) \
-                .execute()
-        except Exception:
-            pass
-    st.session_state.user_info = None
-    st.session_state.page = "login"
-    st.rerun()
+                st.session_state.user_info["ho_ten"] = ho_ten_nhap.strip()
+                st.session_state.user_info["chuc_vu"] = chuc_vu_nhap
+                st.session_state.user_info["lan_dang_nhap_dau"] = False
+                st.success("✅ Cập nhật thông tin thành công!")
+                st.rerun()
 
 # ==============================================================================
-# 4. ĐIỀU HƯỚNG MÀN HÌNH (ROUTING)
+# 5. ĐIỀU HƯỚNG MÀN HÌNH (ROUTING)
 # ==============================================================================
 
 # ------------------------------------------------------------------------------
 # MÀN HÌNH ĐĂNG NHẬP (LOGIN)
 # ------------------------------------------------------------------------------
-if st.session_state.page == "login" or not st.session_state.user_info:
+if not st.session_state.get("logged_in") or st.session_state.page == "login":
     st.markdown("""
         <div class="main-title">
             🚘 VINFAST HƯNG THỊNH PHÁT<br>
@@ -400,6 +380,7 @@ if st.session_state.page == "login" or not st.session_state.user_info:
             else:
                 success, result = xac_thuc_dang_nhap(username.strip(), password.strip())
                 if success:
+                    st.session_state.logged_in = True
                     st.session_state.user_info = result
                     st.session_state.page = "home"
                     st.success(f"Xin chào {result['ho_ten']}!")
@@ -410,7 +391,18 @@ if st.session_state.page == "login" or not st.session_state.user_info:
 # ------------------------------------------------------------------------------
 # MÀN HÌNH CHÍNH (HOME)
 # ------------------------------------------------------------------------------
-# --- HIỂN THỊ THÔNG BÁO CHUNG TỪ BAN GIÁM ĐỐC ---
+elif st.session_state.page == "home":
+    user = st.session_state.user_info
+    chuc_vu_text = "Giám Đốc Showroom" if user.get("chuc_vu") == "giam_doc" else "Nhân Viên Showroom"
+
+    st.markdown(f"""
+        <div class="main-title">
+            🚘 <a href="https://vinfasthungthinhphat.vn" target="_blank">VINFAST HƯNG THỊNH PHÁT</a><br>
+            <span style="font-size: 14px; color: #00d26a;">Xin chào: {user.get('ho_ten', '')} ({chuc_vu_text})</span>
+        </div>
+    """, unsafe_allow_html=True)
+
+    # Hiển thị thông báo chung từ Ban Giám Đốc
     try:
         res_tb = supabase_client.table("thong_bao_chung").select("*").order("id", desc=True).limit(3).execute()
         if res_tb.data:
@@ -420,17 +412,6 @@ if st.session_state.page == "login" or not st.session_state.user_info:
                     pass
     except Exception:
         pass
-        
-elif st.session_state.page == "home":
-    user = st.session_state.user_info
-    chuc_vu_text = "Giám Đốc Showroom" if user["chuc_vu"] == "giam_doc" else "Nhân Viên Showroom"
-
-    st.markdown(f"""
-        <div class="main-title">
-            🚘 <a href="https://vinfasthungthinhphat.vn" target="_blank">VINFAST HƯNG THỊNH PHÁT</a><br>
-            <span style="font-size: 14px; color: #00d26a;">Xin chào: {user['ho_ten']} ({chuc_vu_text})</span>
-        </div>
-    """, unsafe_allow_html=True)
 
     if st.button("1. 🚗 KHÁCH ĐẾN SHOWROOM", use_container_width=True, type="primary"):
         set_page("khach_den")
@@ -444,13 +425,12 @@ elif st.session_state.page == "home":
         set_page("tra_cuu")
         st.rerun()
 
-   # --- Nút gửi ý kiến chung (cho tất cả người dùng) ---
     if st.button("💬 GỬI Ý KIẾN ĐÓNG GÓP", key="btn_home_gui_y_kien", use_container_width=True):
         set_page("gui_y_kien")
         st.rerun()
 
-    # --- PHÂN QUYỀN BAN GIÁM ĐỐC ---
-    if user["chuc_vu"] == "giam_doc":
+    # PHÂN QUYỀN BAN GIÁM ĐỐC
+    if user.get("chuc_vu") == "giam_doc":
         if st.button("4. 📊 BÁO CÁO THỐNG KÊ THEO NGÀY", key="btn_home_bao_cao", use_container_width=True):
             set_page("bao_cao")
             st.rerun()
@@ -458,6 +438,7 @@ elif st.session_state.page == "home":
         if st.button("5. 📬 QUẢN LÝ Ý KIẾN & PHẢN HỒI (BGĐ)", key="btn_home_quan_ly_yk", use_container_width=True, type="primary"):
             set_page("quan_ly_y_kien")
             st.rerun()
+
 # ------------------------------------------------------------------------------
 # KHÂU KHÁCH ĐẾN SHOWROOM
 # ------------------------------------------------------------------------------
@@ -585,14 +566,13 @@ elif st.session_state.page == "tra_cuu":
 elif st.session_state.page == "bao_cao":
     st.markdown('<div class="sub-title">📊 BÁO CÁO THỐNG KÊ THEO NGÀY</div>', unsafe_allow_html=True)
 
-    # Chọn ngày muốn xem báo cáo
     ngay_chon = st.date_input("Chọn ngày xem báo cáo:", datetime.now())
     str_ngay = ngay_chon.strftime("%Y-%m-%d")
 
     if st.button("🔍 TRUY XUẤT DỮ LIỆU", type="primary", use_container_width=True):
         if supabase_client:
             try:
-                # 1. Truy vấn dữ liệu Khách Đến trong ngày
+                # 1. Truy vấn dữ liệu Khách Đến
                 res_den = supabase_client.table("khach_den") \
                     .select("*") \
                     .gte("thoi_gian", f"{str_ngay} 00:00:00") \
@@ -600,7 +580,7 @@ elif st.session_state.page == "bao_cao":
                     .execute()
                 data_den = res_den.data
 
-                # 2. Truy vấn dữ liệu Khách Về trong ngày
+                # 2. Truy vấn dữ liệu Khách Về
                 res_ve = supabase_client.table("khach_ve") \
                     .select("*") \
                     .gte("thoi_gian", f"{str_ngay} 00:00:00") \
@@ -608,22 +588,20 @@ elif st.session_state.page == "bao_cao":
                     .execute()
                 data_ve = res_ve.data
 
-                # 3. Hiển thị các chỉ số tổng quan (KPIs)
+                # 3. Hiển thị KPIs
                 col1, col2, col3 = st.columns(3)
                 col1.metric("📥 Tổng Khách Đến", f"{len(data_den)} lượt")
                 col2.metric("📤 Tổng Khách Về", f"{len(data_ve)} lượt")
                 
-                # Tính số lượng cọc
                 so_luong_coc = sum(1 for item in data_ve if item.get("trang_thai_coc") == "Đã đặt cọc")
                 col3.metric("💰 Số Lượng Cọc", f"{so_luong_coc} hợp đồng")
 
                 st.write("---")
 
-                # 4. Tìm dòng xe được quan tâm nhiều nhất
+                # 4. Xe được quan tâm nhiều nhất
                 ds_xe = []
                 for item in data_den:
                     if item.get("dong_xe"):
-                        # Lấy tên dòng xe chính
                         xe_name = item["dong_xe"].split("(")[0].strip()
                         ds_xe.append(xe_name)
                 
@@ -652,7 +630,7 @@ elif st.session_state.page == "bao_cao":
         st.rerun()
 
 # ------------------------------------------------------------------------------
-# MÀN HÌNH GỬI Ý KIẾN ĐÓNG GÓP (CHO KHÁCH HÀNG & NHÂN VIÊN)
+# MÀN HÌNH GỬI Ý KIẾN ĐÓNG GÓP
 # ------------------------------------------------------------------------------
 elif st.session_state.page == "gui_y_kien":
     st.markdown('<div class="sub-title">💬 GỬI Ý KIẾN ĐÓNG GÓP</div>', unsafe_allow_html=True)
@@ -664,7 +642,7 @@ elif st.session_state.page == "gui_y_kien":
         if loai_y_kien == "Khách hàng":
             ten_nguoi_gui = st.text_input("Họ tên / Số điện thoại (Không bắt buộc):", value="Khách hàng")
         else:
-            user_nv = st.session_state.user_info.get("ho_ten", "Nhân viên")
+            user_nv = st.session_state.user_info.get("ho_ten", "Nhân viên") if st.session_state.user_info else "Nhân viên"
             ten_nguoi_gui = st.text_input("Tên / Mã nhân viên:", value=user_nv)
 
         noi_dung = st.text_area("Nội dung đóng góp ý kiến / Góp ý dịch vụ: *", height=120)
@@ -692,7 +670,55 @@ elif st.session_state.page == "gui_y_kien":
         st.rerun()
 
 # ------------------------------------------------------------------------------
-# MÀN HÌNH QUẢN LÝ Ý KIẾN & TRẢ LỜI DÀNH RIÊNG CHO BAN GIÁM ĐỐC
+# MÀN HÌNH QUẢN LÝ Ý KIẾN (DÀNH CHO BGĐ)
+# ------------------------------------------------------------------------------
+elif st.session_state.page == "quan_ly_y_kien":
+    if st.session_state.user_info.get("chuc_vu") != "giam_doc":
+        st.error("🚫 Quyền truy cập bị từ chối! Trang này chỉ dành cho Ban Giám Đốc.")
+        if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH"):
+            set_page("home")
+            st.rerun()
+    else:
+        st.markdown('<div class="sub-title">📬 HỘM THƯ Ý KIẾN ĐÓNG GÓP (BAN GIÁM ĐỐC)</div>', unsafe_allow_html=True)
+
+        if supabase_client:
+            try:
+                res = supabase_client.table("y_kien_dong_gop").select("*").order("id", desc=True).execute()
+                ds_y_kien = res.data
+
+                if not ds_y_kien:
+                    st.info("Hiện chưa có ý kiến đóng góp nào.")
+                else:
+                    for item in ds_y_kien:
+                        with st.expander(f"📩 [{item['loai_y_kien']}] {item['nguoi_gui']} - {item['thoi_gian'][:16]}", expanded=(item.get('phan_hoi') is None)):
+                            st.write(f"**Nội dung đóng góp:**")
+                            st.warning(item['noi_dung'])
+
+                            if item.get('phan_hoi'):
+                                st.success(f"💬 **BGĐ đã trả lời ({item.get('thoi_gian_phan_hoi', '')[:16]}):**\n\n{item['phan_hoi']}")
+                            else:
+                                st.write("✍️ **Viết phản hồi của Ban Giám Đốc:**")
+                                phan_hoi_text = st.text_area("Nội dung phản hồi:", key=f"reply_{item['id']}")
+                                if st.button("💾 Gửi phản hồi", key=f"btn_reply_{item['id']}"):
+                                    if phan_hoi_text.strip():
+                                        supabase_client.table("y_kien_dong_gop").update({
+                                            "phan_hoi": phan_hoi_text.strip(),
+                                            "thoi_gian_phan_hoi": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                                        }).eq("id", item['id']).execute()
+                                        st.success("✅ Đã lưu phản hồi thành công!")
+                                        st.rerun()
+                                    else:
+                                        st.error("Vui lòng nhập nội dung phản hồi.")
+            except Exception as e:
+                st.error(f"⚠️ Lỗi tải danh sách ý kiến: {e}")
+
+        st.write("---")
+        if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
+            set_page("home")
+            st.rerun()
+
+# ------------------------------------------------------------------------------
+# MÀN HÌNH BẢNG QUẢN TRỊ BGĐ (QUẢN LÝ TK / THÔNG BÁO / TRẢ LỜI Ý KIẾN)
 # ------------------------------------------------------------------------------
 elif st.session_state.page == "quan_ly_bgd":
     if st.session_state.user_info.get("chuc_vu") != "giam_doc":
@@ -713,7 +739,7 @@ elif st.session_state.page == "quan_ly_bgd":
             if search_nv:
                 ds_nv = [x for x in ds_nv if search_nv.lower() in x['ten_dang_nhap'].lower() or search_nv.lower() in (x.get('ho_ten') or '').lower()]
 
-            for nv in ds_nv[:20]: # Hiển thị top 20 kết quả
+            for nv in ds_nv[:20]:
                 col1, col2, col3 = st.columns([3, 2, 2])
                 with col1:
                     st.write(f"**{nv['ten_dang_nhap']}** - {nv.get('ho_ten', 'Chưa khai báo')} ({nv.get('chuc_vu')})")
@@ -768,48 +794,6 @@ elif st.session_state.page == "quan_ly_bgd":
                                 "thoi_gian_phan_hoi": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
                             }).eq("id", yk['id']).execute()
                             st.success("Đã phản hồi!"); st.rerun()
-
-elif st.session_state.page == "quan_ly_y_kien":
-    # Bảo mật: Kiểm tra xem có đúng là Ban Giám Đốc không
-    if st.session_state.user_info.get("chuc_vu") != "giam_doc":
-        st.error("🚫 Quyền truy cập bị từ chối! Trang này chỉ dành cho Ban Giám Đốc.")
-        if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH"):
-            set_page("home")
-            st.rerun()
-    else:
-        st.markdown('<div class="sub-title">📬 HỘM THƯ Ý KIẾN ĐÓNG GÓP (BAN GIÁM ĐỐC)</div>', unsafe_allow_html=True)
-
-        if supabase_client:
-            try:
-                # Lấy toàn bộ danh sách ý kiến
-                res = supabase_client.table("y_kien_dong_gop").select("*").order("id", desc=True).execute()
-                ds_y_kien = res.data
-
-                if not ds_y_kien:
-                    st.info("Hiện chưa có ý kiến đóng góp nào.")
-                else:
-                    for item in ds_y_kien:
-                        with st.expander(f"📩 [{item['loai_y_kien']}] {item['nguoi_gui']} - {item['thoi_gian'][:16]}", expanded=(item['phan_hoi'] is None)):
-                            st.write(f"**Nội dung đóng góp:**")
-                            st.warning(item['noi_dung'])
-
-                            if item.get('phan_hoi'):
-                                st.success(f"💬 **BGĐ đã trả lời ({item.get('thoi_gian_phan_hoi', '')[:16]}):**\n\n{item['phan_hoi']}")
-                            else:
-                                st.write("✍️ **Viết phản hồi của Ban Giám Đốc:**")
-                                phan_hoi_text = st.text_area("Nội dung phản hồi:", key=f"reply_{item['id']}")
-                                if st.button("💾 Gửi phản hồi", key=f"btn_reply_{item['id']}"):
-                                    if phan_hoi_text.strip():
-                                        supabase_client.table("y_kien_dong_gop").update({
-                                            "phan_hoi": phan_hoi_text.strip(),
-                                            "thoi_gian_phan_hoi": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-                                        }).eq("id", item['id']).execute()
-                                        st.success("✅ Đã lưu phản hồi thành công!")
-                                        st.rerun()
-                                    else:
-                                        st.error("Vui lòng nhập nội dung phản hồi.")
-            except Exception as e:
-                st.error(f"⚠️ Lỗi tải danh sách ý kiến: {e}")
 
         st.write("---")
         if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
