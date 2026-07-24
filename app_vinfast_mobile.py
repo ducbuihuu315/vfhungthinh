@@ -5,41 +5,7 @@ import pandas as pd
 import streamlit as st
 from datetime import datetime, timedelta
 from supabase import create_client, Client
-#... thiết kế header & thanh tab căn lề trái 
-# --- CSS TÙY CHỈNH: Tối ưu lề trái & giao diện Mobile ---
-st.markdown("""
-    <style>
-    /* Căn sát lề trái cho cụm nút / tab navigation */
-    div[data-testid="stHorizontalBlock"] {
-        align-items: center;
-    }
-    .custom-tab-btn button {
-        width: 100%;
-        text-align: left;
-        padding: 8px 12px;
-    }
-    /* Khung hiển thị chính sách Hưng Thịnh Phát */
-    .policy-box {
-        background-color: #f8f9fa;
-        border-left: 4px solid #e01b22; /* Màu đỏ thương hiệu VinFast */
-        padding: 12px 15px;
-        border-radius: 4px;
-        margin-bottom: 15px;
-    }
-    </style>
-""", unsafe_allow_html=True)
 
-
-
-# ...==========================================
-
-# Tích hợp Google Sheets Realtime
-try:
-    import gspread
-    from google.oauth2.service_account import Credentials
-    HAS_GSPREAD = True
-except ImportError:
-    HAS_GSPREAD = False
 
 # ==============================================================================
 # 1. CẤU HÌNH TRANG & MÀN HÌNH NỀN (BACKGROUND)
