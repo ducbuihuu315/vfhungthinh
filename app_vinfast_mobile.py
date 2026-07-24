@@ -1,12 +1,21 @@
 import os
 import uuid
+import openpyxl
 import pandas as pd
 import streamlit as st
 from datetime import datetime, timedelta
 from supabase import create_client, Client
 
+# Tích hợp Google Sheets Realtime
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials
+    HAS_GSPREAD = True
+except ImportError:
+    HAS_GSPREAD = False
+
 # ==============================================================================
-# 1. CẤU HÌNH TRANG & MÀN HÌNH NỀN (NHẬN DIỆN THƯƠNG HIỆU VINFAST)
+# 1. CẤU HÌNH TRANG & MÀN HÌNH NỀN (BACKGROUND)
 # ==============================================================================
 st.set_page_config(
     page_title="VinFast Hưng Thịnh Phát",
@@ -20,9 +29,9 @@ URL_ANH_NEN = "https://raw.githubusercontent.com/ducbuihuu315/vfhungthinh/main/h
 
 st.markdown(f"""
     <style>
-    /* Cấu hình nền ứng dụng với tông màu VinFast Blue (#005baa) và tối mờ */
+    /* Cấu hình màn hình nền có lớp phủ tối để nổi bật chữ */
     .stApp {{
-        background: linear-gradient(rgba(10, 25, 47, 0.88), rgba(10, 25, 47, 0.88)), 
+        background: linear-gradient(rgba(18, 18, 18, 0.85), rgba(18, 18, 18, 0.85)), 
                     url('{URL_ANH_NEN}');
         background-size: cover;
         background-position: center;
@@ -31,48 +40,42 @@ st.markdown(f"""
         color: #ffffff;
     }}
     
-    /* Tiêu đề chính - Viền Chrome & Màu VinFast Blue */
     .main-title {{ 
         text-align: center; 
         color: #ffffff; 
         font-weight: bold; 
         font-size: 22px; 
         margin-bottom: 20px; 
-        background: linear-gradient(135deg, #005baa, #003b73); 
+        background-color: rgba(30, 30, 30, 0.9); 
         padding: 15px; 
         border-radius: 12px; 
-        border: 1px solid #d1d5db; 
-        box-shadow: 0px 4px 12px rgba(0, 91, 170, 0.4);
+        border: 1px solid #333333; 
     }}
     .main-title a {{ color: #ffffff !important; text-decoration: none !important; }}
-    .main-title a:hover {{ color: #00a651 !important; }}
-    .sub-title {{ color: #00a651; font-weight: bold; font-size: 18px; text-align: center; margin-bottom: 15px; text-transform: uppercase; }}
+    .main-title a:hover {{ color: #00d26a !important; }}
+    .sub-title {{ color: #ffc107; font-weight: bold; font-size: 18px; text-align: center; margin-bottom: 15px; }}
     
-    /* Cấu hình Nút bấm (Buttons) - Chuẩn VinFast Blue & Viền Chrome */
     div.stButton > button {{
         width: 100% !important;
-        height: 52px !important;
+        height: 55px !important;
         font-weight: bold !important;
-        font-size: 15px !important;
-        border-radius: 10px !important;
-        margin-bottom: 10px !important;
-        background: linear-gradient(135deg, #005baa, #004080) !important;
+        font-size: 16px !important;
+        border-radius: 12px !important;
+        margin-bottom: 12px !important;
+        background: linear-gradient(135deg, #1e293b, #0f172a) !important;
         color: #ffffff !important;
-        border: 1px solid #d1d5db !important;
-        box-shadow: 0px 3px 8px rgba(0, 91, 170, 0.3) !important;
-        transition: all 0.25s ease-in-out !important;
+        border: 2px solid #00d26a !important;
+        box-shadow: 0px 4px 10px rgba(0, 210, 106, 0.2) !important;
+        transition: all 0.2s ease-in-out !important;
     }}
     div.stButton > button:hover, div.stButton > button:active {{
-        background: #00a651 !important; 
-        color: #ffffff !important; 
-        border-color: #ffffff !important;
-        box-shadow: 0px 4px 12px rgba(0, 166, 81, 0.5) !important;
+        background: #00d26a !important; color: #000000 !important; border-color: #00d26a !important;
     }}
     </style>
 """, unsafe_allow_html=True)
 
 # ==============================================================================
-# 2. KHỞI TẠO CSDL SUPABASE & TRUY XUẤT DỮ LIỆU
+# 2. KHỞI TẠO CSDL SUPABASE & HÀM BỔ TRỢ
 # ==============================================================================
 @st.cache_resource
 def init_supabase() -> Client:
@@ -87,72 +90,55 @@ def init_supabase() -> Client:
 
 supabase_client = init_supabase()
 
-@st.cache_data(ttl=300)
-def load_danh_muc_xe():
-    """Tải danh mục xe động từ bảng 'danh_muc_xe' trên Supabase"""
-    if not supabase_client:
-        return pd.DataFrame()
-    try:
-        res = supabase_client.table("danh_muc_xe").select("*").order("id").execute()
-        if res.data:
-            df = pd.DataFrame(res.data)
-            # Đổi tên cột khớp với giao diện hiển thị
-            rename_map = {
-                "phan_khuc": "Phân khúc",
-                "dong_xe": "Dòng xe",
-                "phien_ban": "Phiên bản",
-                "gia_niem_yet": "Giá niêm yết (VND)",
-                "he_thong_dan_dong": "Hệ thống dẫn động",
-                "loai_tran_xe": "Loại trần xe",
-                "quang_duong_toi_da": "Quãng đường tối đa",
-                "tinh_nang_noi_bat": "Tính năng nổi bật"
-            }
-            df = df.rename(columns=rename_map)
-            return df
-        return pd.DataFrame()
-    except Exception as e:
-        st.error(f"⚠️ Lỗi tải bảng danh mục xe từ Supabase: {e}")
-        return pd.DataFrame()
-
-# Tải DataFrame danh mục xe động từ CSDL
-df_vinfast = load_danh_muc_xe()
-
 def luu_du_lieu_realtime(loai, hang_du_lieu):
     """Hàm ghi dữ liệu trực tiếp vào Supabase & thu thập IP / Thiết bị"""
-    headers = st.context.headers
-    user_ip = headers.get("X-Forwarded-For", "N/A").split(',')[0].strip()
+    # 🛡️ Tương thích phiên bản Streamlit (st.context.headers)
+    headers = {}
+    try:
+        if hasattr(st, "context") and hasattr(st.context, "headers"):
+            headers = st.context.headers or {}
+        elif hasattr(st, "web") and hasattr(st.web, "server") and hasattr(st.web.server, "websocket_headers"):
+            headers = st.web.server.websocket_headers or {}
+    except Exception:
+        headers = {}
+
+    user_ip = headers.get("X-Forwarded-For", "N/A").split(',')[0].strip() if headers.get("X-Forwarded-For") else "N/A"
     user_agent = headers.get("User-Agent", "N/A")
 
     if not supabase_client:
         st.error("⚠️ Không thể kết nối tới CSDL Supabase!")
         return
 
+    # 💡 An toàn hơn khi truyền dữ liệu vào luu_du_lieu_realtime() (Tránh IndexError)
+    def get_val(lst, idx, default=""):
+        return lst[idx] if len(lst) > idx else default
+
     try:
         if loai == "KHÁCH ĐẾN":
             data_to_insert = {
-                "thoi_gian": hang_du_lieu[0],
-                "loai_khach": hang_du_lieu[1],
-                "ma_nv": hang_du_lieu[2],
-                "ho_ten_kh": hang_du_lieu[3],
-                "dong_xe": hang_du_lieu[4],
-                "muc_dich": hang_du_lieu[5],
-                "mau_sac": hang_du_lieu[6],
-                "nhu_cau_vay": hang_du_lieu[7],
-                "sdt": hang_du_lieu[8],
+                "thoi_gian": get_val(hang_du_lieu, 0),
+                "loai_khach": get_val(hang_du_lieu, 1),
+                "ma_nv": get_val(hang_du_lieu, 2),
+                "ho_ten_kh": get_val(hang_du_lieu, 3),
+                "dong_xe": get_val(hang_du_lieu, 4),
+                "muc_dich": get_val(hang_du_lieu, 5),
+                "mau_sac": get_val(hang_du_lieu, 6),
+                "nhu_cau_vay": get_val(hang_du_lieu, 7),
+                "sdt": get_val(hang_du_lieu, 8),
                 "ip_may": user_ip,
                 "user_agent": user_agent
             }
             supabase_client.table("khach_den").insert(data_to_insert).execute()
         else:
             data_to_insert = {
-                "thoi_gian": hang_du_lieu[0],
-                "trang_thai_coc": hang_du_lieu[1],
-                "ma_nv": hang_du_lieu[2],
-                "ho_ten": hang_du_lieu[3],
-                "sdt": hang_du_lieu[4],
-                "cccd": hang_du_lieu[5],
-                "xe_da_xem": hang_du_lieu[6],
-                "tien_coc": hang_du_lieu[7],
+                "thoi_gian": get_val(hang_du_lieu, 0),
+                "trang_thai_coc": get_val(hang_du_lieu, 1),
+                "ma_nv": get_val(hang_du_lieu, 2),
+                "ho_ten": get_val(hang_du_lieu, 3),
+                "sdt": get_val(hang_du_lieu, 4),
+                "cccd": get_val(hang_du_lieu, 5),
+                "xe_da_xem": get_val(hang_du_lieu, 6),
+                "tien_coc": get_val(hang_du_lieu, 7),
                 "ip_may": user_ip,
                 "user_agent": user_agent
             }
@@ -162,7 +148,7 @@ def luu_du_lieu_realtime(loai, hang_du_lieu):
         st.error(f"⚠️ Lỗi khi đồng bộ dữ liệu: {e}")
 
 def xac_thuc_dang_nhap(username, password):
-    """Xác thực đăng nhập & Cấp Session ID mới"""
+    """Xác thực đăng nhập & Cấp Session ID mới (Auto Logout thiết bị cũ)"""
     if not supabase_client:
         return False, "⚠️ Không kết nối được CSDL!"
 
@@ -174,10 +160,14 @@ def xac_thuc_dang_nhap(username, password):
 
         user = res.data[0]
 
+        # Kiểm tra xem tài khoản có bị Giám đốc khóa không
         if user.get("bi_khoa", False):
             return False, "🚫 Tài khoản của bạn đã bị Ban Giám Đốc khóa!"
 
+        # Tạo Session ID ngẫu nhiên cho thiết bị MỚI NÀY
         new_session_id = str(uuid.uuid4())
+        
+        # Cập nhật Session ID mới vào Supabase (Thiết bị cũ sẽ bị vô hiệu hóa)
         supabase_client.table("tai_khoan").update({
             "session_id": new_session_id,
             "last_active": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
@@ -189,7 +179,7 @@ def xac_thuc_dang_nhap(username, password):
         return False, f"⚠️ Lỗi đăng nhập: {e}"
 
 def check_single_device_session():
-    """Kiểm tra liên tục phiên đăng nhập đơn thiết bị"""
+    """Kiểm tra liên tục: Nếu đăng nhập ở thiết bị 2 -> Thiết bị 1 tự out"""
     if st.session_state.get("logged_in") and st.session_state.get("user_info"):
         user_info = st.session_state.user_info
         try:
@@ -213,11 +203,12 @@ def check_single_device_session():
             pass
 
 def dang_xuat():
-    """Đăng xuất và xóa đăng ký thiết bị"""
+    """Đăng xuất và xóa session thiết bị"""
     if st.session_state.user_info and supabase_client:
         try:
+            # ⚠️ Sửa lỗi không đồng bộ tên cột: Đổi "device_id" -> "session_id"
             supabase_client.table("tai_khoan") \
-                .update({"device_id": None}) \
+                .update({"session_id": None}) \
                 .eq("ten_dang_nhap", st.session_state.user_info["ten_dang_nhap"]) \
                 .execute()
         except Exception:
@@ -227,6 +218,8 @@ def dang_xuat():
     st.session_state.page = "login"
     st.rerun()
 
+# ⚡ Tối ưu hiệu năng: Cache 1 tiếng chạy 1 lần tránh xóa CSDL liên tục mỗi khi rerun
+@st.cache_data(ttl=3600)
 def xoa_thong_bao_het_han():
     """Tự động xóa các thông báo chung đã tạo quá 7 ngày"""
     if supabase_client:
@@ -237,7 +230,7 @@ def xoa_thong_bao_het_han():
             pass
 
 # ==============================================================================
-# 3. KHỞI TẠO SESSION & DỮ LIỆU DÒNG XE / HÌNH ẢNH
+# 3. KHỞI TẠO SESSION & DỮ LIỆU DÒNG XE / HÌNH ẢNH / THÔNG SỐ SO SÁNH
 # ==============================================================================
 if "user_info" not in st.session_state:
     st.session_state.user_info = None
@@ -279,75 +272,126 @@ def hien_thi_anh_xe(dong_xe):
 # Tự động dọn dẹp thông báo cũ quá 7 ngày
 xoa_thong_bao_het_han()
 
-# Lấy danh sách dòng xe động từ bảng danh_muc_xe
-if not df_vinfast.empty and "Dòng xe" in df_vinfast.columns:
-    cac_dong_xe = sorted(list(df_vinfast["Dòng xe"].unique()))
-else:
-    cac_dong_xe = ["VF 3", "VF 5 Plus", "VF 6", "VF 7", "VF 8", "VF 9"]
+# Dữ liệu đầy đủ 19 phiên bản dòng xe VinFast
+data_vinfast = {
+    "Phân khúc": [
+        "Micro-car", "Mini SUV", "Mini SUV", "SUV Cỡ A", "SUV Cỡ B", "SUV Cỡ B",
+        "SUV Cỡ C", "SUV Cỡ C", "SUV Cỡ C", "SUV Cỡ D", "SUV Cỡ D", "SUV Cỡ E", "SUV Cỡ E",
+        "Hatchback Dịch vụ", "Sedan/Hatchback B", "MPV Dịch vụ", "MPV Cao cấp", "Xe tải Van", "Xe tải Van"
+    ],
+    "Dòng xe": [
+        "VF 2", "VF 3", "VF 3", "VF 5 Plus", "VF 6", "VF 6",
+        "VF 7", "VF 7", "VF 7", "VF 8", "VF 8", "VF 9", "VF 9",
+        "Minio Green", "Herio Green", "Limo Green", "VF MPV 7", "EC Van", "EC Van"
+    ],
+    "Phiên bản": [
+        "Tiêu chuẩn", "Eco", "Plus", "Tiêu chuẩn", "Eco", "Plus",
+        "Eco", "Plus Standard", "Plus Premium", "Eco (CATL)", "Plus (CATL)", "Eco (CATL)", "Plus (CATL)",
+        "Tiêu chuẩn", "Tiêu chuẩn", "7 chỗ", "Tiêu chuẩn", "Tiêu chuẩn", "Nâng cấp"
+    ],
+    "Giá niêm yết (VND)": [
+        188000000, 302000000, 315000000, 529000000, 689000000, 745000000,
+        789000000, 919000000, 999000000, 1069000000, 1199000000, 1499000000, 1699000000,
+        269000000, 499000000, 749000000, 819000000, 174600000, 285000000
+    ],
+    "Hệ thống dẫn động": [
+        "1 cầu (RWD)", "1 cầu (RWD)", "1 cầu (RWD)", "1 cầu (FWD)", "1 cầu (FWD)", "1 cầu (FWD)",
+        "1 cầu (FWD)", "1 cầu (FWD)", "2 cầu (AWD)", "1 cầu (FWD)", "2 cầu (AWD)", "2 cầu (AWD)", "2 cầu (AWD)",
+        "1 cầu (FWD)", "1 cầu (FWD)", "1 cầu (FWD)", "1 cầu (FWD)", "1 cầu (RWD)", "1 cầu (RWD)"
+    ],
+    "Loại trần xe": [
+        "Trần thép", "Trần thép", "Trần thép", "Trần thép", "Trần thép", "Trần thép",
+        "Trần thép", "Trần thép", "Trần kính toàn cảnh", "Trần thép", "Trần thép (Tùy chọn kính)", "Trần thép", "Trần kính toàn cảnh",
+        "Trần thép", "Trần thép", "Trần thép", "Trần thép", "Trần thép", "Trần thép"
+    ],
+    "Quãng đường tối đa": [
+        "~120 - 150 km", "~210 km (NEDC)", "~210 km (NEDC)", "~326 km (NEDC)", "~399 km (WLTP)", "~381 km (WLTP)",
+        "~450 km (WLTP)", "~431 km (WLTP)", "~431 km (WLTP)", "~471 km (WLTP)", "~450 km (WLTP)", "~626 km (WLTP)", "~602 km (WLTP)",
+        "~160 - 180 km", "~300 - 320 km", "~400 km", "~420 km", "~120 - 140 km", "~140 km"
+    ],
+    "Tính năng nổi bật": [
+        "Bán kính quay đầu cực nhỏ, hỗ trợ sạc nhanh tại nhà qua điện dân dụng gia đình.",
+        "Thiết kế vuông vức cá tính, màn hình giải trí 10 inch, cần số tích hợp sau vô lăng.",
+        "Mâm đúc thể thao hợp kim, màu sơn phối 2 tông thời trang cá nhân hóa cao.",
+        "Cảnh báo điểm mù, cảnh báo phương tiện cắt ngang phía sau, trang bị sẵn 6 túi khí an toàn.",
+        "Màn hình cảm ứng hướng về người lái, ghế bọc nỉ pha da cao cấp, ga tự động Cruise Control.",
+        "Hệ thống hỗ trợ lái thông minh ADAS cấp độ 2 nâng cao, mâm xe lớn thể thao 19 inch.",
+        "Thiết kế phong cách phi thuyền tương lai, tay nắm cửa ẩn cơ học mượt mà, mâm 19 inch.",
+        "Động cơ nâng cấp lên 201 hp, cốp sau đóng mở điện tiện lợi, nội thất bọc da mịn.",
+        "Hệ dẫn động AWD công suất 349 hp mạnh mẽ, màn hình thông tin trên kính lái HUD, trần kính.",
+        "Màn hình trung tâm siêu lớn 15.6 inch, hỗ trợ trợ lý ảo thông minh tiếng Việt đa vùng miền.",
+        "Ghế da thật cao cấp chỉnh điện đa hướng tích hợp chức năng sấy ấm và thông gió làm mát.",
+        "Không gian nội thất SUV cỡ đại 7 chỗ ngồi thực tế rộng rãi, hệ thống loa cao cấp.",
+        "Hàng ghế thứ 2 kiểu VIP cơ trưởng, tích hợp massage/sưởi/thông gió, trần kính Panorama.",
+        "Chi phí sạc điện siêu rẻ, kết nối app quản lý taxi công nghệ phục vụ doanh thu.",
+        "Thiết kế Sedan trường dáng lịch sự, cốp sau rộng để được nhiều vali hành lý của khách.",
+        "Hàng ghế khoang khách bọc da êm ái biệt lập, bệ tỳ tay lớn, hỗ trợ cổng sạc nhanh.",
+        "Cấu hình MPV gia đình thực dụng, sàn phẳng tối ưu chỗ để chân, cửa gió điều hòa độc lập.",
+        "Khoang sau hoán cải hoàn toàn phẳng, vách ngăn cabin kiên cố, được lưu thông phố 24/7.",
+        "Cửa lùa trượt mượt mà hai bên hông xe, nâng cấp điều hòa làm lạnh nhanh và trợ lực vô lăng lái."
+    ]
+}
 
-cac_mau_xe = ["Trắng", "Đen", "Xám", "Bạc", "Xanh VinFast", "Đỏ"]
+df_vinfast = pd.DataFrame(data_vinfast)
+cac_dong_xe = sorted(list(set(data_vinfast["Dòng xe"])))
+cac_mau_xe = ["Trắng", "Đen", "Xám", "Bạc", "Xanh", "Đỏ"]
 
 def hien_thi_thong_tin_so_sanh(dong_xe):
-    """Hàm hiển thị thông tin các phiên bản xe lấy từ Supabase"""
-    if df_vinfast.empty:
-        st.warning("Đang tải dữ liệu danh mục xe...")
-        return
-
+    """Hàm hiển thị danh sách các phiên bản & tính năng nổi bật của xe được chọn"""
     df_sub = df_vinfast[df_vinfast["Dòng xe"] == dong_xe]
     
     for idx, row in df_sub.iterrows():
-        st.markdown(f"#### 📌 Phiên bản: **{row.get('Phiên bản', 'Tiêu chuẩn')}**")
+        st.markdown(f"#### 📌 Phiên bản: **{row['Phiên bản']}**")
         col1, col2 = st.columns(2)
         with col1:
-            st.info(f"🧱 **Loại trần:** {row.get('Loại trần xe', 'N/A')}")
-            st.success(f"🔋 **Quãng đường:** {row.get('Quãng đường tối đa', 'N/A')}")
+            st.info(f"🧱 **Loại trần:** {row['Loại trần xe']}")
+            st.success(f"🔋 **Quãng đường:** {row['Quãng đường tối đa']}")
         with col2:
-            st.warning(f"⚙️ **Dẫn động:** {row.get('Hệ thống dẫn động', 'N/A')}")
-            gia_val = row.get("Giá niêm yết (VND)", 0)
-            try:
-                gia_fmt = f"{float(gia_val):,.0f} VNĐ"
-            except Exception:
-                gia_fmt = f"{gia_val} VNĐ"
-            st.error(f"💰 **Giá niêm yết:** {gia_fmt}")
+            st.warning(f"⚙️ **Dẫn động:** {row['Hệ thống dẫn động']}")
+            st.error(f"💰 **Giá niêm yết:** {row['Giá niêm yết (VND)']:,.0f} VNĐ")
             
-        st.markdown(f"✨ **Tính năng nổi bật:** {row.get('Tính năng nổi bật', 'N/A')}")
+        st.markdown(f"✨ **Tính năng nổi bật:** {row['Tính năng nổi bật']}")
         st.markdown("---")
 
+# Kiểm tra phiên làm việc đơn thiết bị
 check_single_device_session()
 
 # ==============================================================================
 # 4. KHAI BÁO THÔNG TIN LẦN ĐẦU CHO NHÂN VIÊN
 # ==============================================================================
 if st.session_state.get("logged_in") and st.session_state.get("user_info"):
-    user = st.session_state.user_info
-    chuc_vu_val = user.get("chuc_vu", "")
-    chuc_vu_text = "Giám Đốc Showroom" if chuc_vu_val == "giam_doc" else (chuc_vu_val if chuc_vu_val else "Nhân Viên Showroom")
-    ho_ten_nhap = user.get("ho_ten", "")
-    chuc_vu_nhap = chuc_vu_val
+        user = st.session_state.user_info
+        
+        # Khởi tạo giá trị mặc định cho biến chuc_vu_text và ho_ten_nhap
+        chuc_vu_val = user.get("chuc_vu", "")
+        chuc_vu_text = "Giám Đốc Showroom" if chuc_vu_val == "giam_doc" else (chuc_vu_val if chuc_vu_val else "Nhân Viên Showroom")
+        ho_ten_nhap = user.get("ho_ten", "")
+        chuc_vu_nhap = chuc_vu_val
 
-    if user.get("lan_dang_nhap_dau", False) and user.get("chuc_vu") != "giam_doc":
-        st.warning("⚠️ Dành cho lần đăng nhập đầu tiên: Vui lòng khai báo Chức vụ / Bộ phận của bạn.")
-        chuc_vu_nhap = st.selectbox("Chọn Chức vụ / Bộ phận:", ["Cố vấn dịch vụ", "Kỹ thuật viên", "Tư vấn bán hàng", "Lễ tân", "Bảo vệ", "Tài chính / Kế toán", "Khác"])
-        ho_ten_nhap = st.text_input("Họ và tên nhân viên:", value=user.get("ho_ten", ""))
+        # Kiểm tra lần đăng nhập đầu tiên đối với nhân viên
+        if user.get("lan_dang_nhap_dau", False) and user.get("chuc_vu") != "giam_doc":
+            st.warning("⚠️ Dành cho lần đăng nhập đầu tiên: Vui lòng khai báo Chức vụ / Bộ phận của bạn.")
+            chuc_vu_nhap = st.selectbox("Chọn Chức vụ / Bộ phận:", ["Cố vấn dịch vụ", "Kỹ thuật viên", "Tư vấn bán hàng", "Lễ tân", "Bảo vệ", "Tài chính / Kế toán", "Khác"])
+            ho_ten_nhap = st.text_input("Họ và tên nhân viên:", value=user.get("ho_ten", ""))
 
-        if st.button("💾 CẬP NHẬT THÔNG TIN", type="primary", use_container_width=True):
-            if not ho_ten_nhap.strip():
-                st.error("⚠️ Vui lòng nhập họ và tên!")
-            else:
-                try:
-                    supabase_client.table("tai_khoan").update({
-                        "ho_ten": ho_ten_nhap.strip(),
-                        "chuc_vu": chuc_vu_nhap,
-                        "lan_dang_nhap_dau": False
-                    }).eq("ten_dang_nhap", user["ten_dang_nhap"]).execute()
-                    
-                    st.session_state.user_info["ho_ten"] = ho_ten_nhap.strip()
-                    st.session_state.user_info["chuc_vu"] = chuc_vu_nhap
-                    st.session_state.user_info["lan_dang_nhap_dau"] = False
-                    st.success("✅ Cập nhật thông tin thành công!")
-                    st.rerun()
-                except Exception as e:
-                    st.error(f"⚠️ Lỗi cập nhật: {e}")
+            if st.button("💾 CẬP NHẬT THÔNG TIN", type="primary", use_container_width=True):
+                if not ho_ten_nhap.strip():
+                    st.error("⚠️ Vui lòng nhập họ và tên!")
+                else:
+                    try:
+                        supabase_client.table("tai_khoan").update({
+                            "ho_ten": ho_ten_nhap.strip(),
+                            "chuc_vu": chuc_vu_nhap,
+                            "lan_dang_nhap_dau": False
+                        }).eq("ten_dang_nhap", user["ten_dang_nhap"]).execute()
+                        
+                        st.session_state.user_info["ho_ten"] = ho_ten_nhap.strip()
+                        st.session_state.user_info["chuc_vu"] = chuc_vu_nhap
+                        st.session_state.user_info["lan_dang_nhap_dau"] = False
+                        st.success("✅ Cập nhật thông tin thành công!")
+                        st.rerun()
+                    except Exception as e:
+                        st.error(f"⚠️ Lỗi cập nhật: {e}")
 
 # ==============================================================================
 # 5. ĐIỀU HƯỚNG MÀN HÌNH (ROUTING)
@@ -360,7 +404,7 @@ if not st.session_state.get("logged_in") or st.session_state.page == "login":
     st.markdown("""
         <div class="main-title">
             🚘 VINFAST HƯNG THỊNH PHÁT<br>
-            <span style="font-size: 14px; color: #00a651;">ĐĂNG NHẬP HỆ THỐNG</span>
+            <span style="font-size: 14px; color: #00d26a;">ĐĂNG NHẬP HỆ THỐNG</span>
         </div>
     """, unsafe_allow_html=True)
         
@@ -394,11 +438,11 @@ elif st.session_state.page == "home":
     st.markdown(f"""
         <div class="main-title">
             🚘 <a href="https://vinfasthungthinhphat.vn" target="_blank">VINFAST HƯNG THỊNH PHÁT</a><br>
-            <span style="font-size: 14px; color: #ffffff;">Xin chào: <strong>{user.get('ho_ten', '')}</strong> ({chuc_vu_text})</span>
+            <span style="font-size: 14px; color: #00d26a;">Xin chào: {user.get('ho_ten', '')} ({chuc_vu_text})</span>
         </div>
     """, unsafe_allow_html=True)
 
-    # 1. HIỂN THỊ THÔNG BÁO TỪ BAN GIÁM ĐỐC
+    # 1. PHẦN HIỂN THỊ THÔNG BÁO TỪ BAN GIÁM ĐỐC (TỰ ĐỘNG LỌC 7 NGÀY)
     if supabase_client:
         try:
             res_tb = supabase_client.table("thong_bao_chung").select("*").order("id", desc=True).limit(5).execute()
@@ -407,10 +451,10 @@ elif st.session_state.page == "home":
                 st.markdown("### 📢 BAN GIÁM ĐỐC THÔNG BÁO")
                 for tb in ds_tb:
                     st.info(f"📌 **{tb['tieu_de']}** ({tb.get('thoi_gian', '')[:16]})\n\n{tb['noi_dung']}")
-        except Exception:
+        except Exception as e:
             pass
 
-    # 2. HIỂN THỊ PHẢN HỒI CỦA BGĐ CHO Ý KIẾN CỦA TÀI KHOẢN NÀY
+    # 2. PHẦN HIỂN THỊ PHẢN HỒI CỦA BGĐ CHO Ý KIẾN CỦA TÀI KHOẢN NÀY
     if supabase_client and user.get("ten_dang_nhap"):
         try:
             res_yk = supabase_client.table("y_kien_dong_gop") \
@@ -420,7 +464,7 @@ elif st.session_state.page == "home":
                 .order("id", desc=True).execute()
             ds_phan_hoi = res_yk.data or []
             if ds_phan_hoi:
-                st.markdown("### 💬 PHẢN HỒI TỪ BAN GIÁM ĐỐC")
+                st.markdown("### 💬 PHẢN HỒI TỪ BAN GIÁM ĐỐC CHO Ý KIẾN CỦA BẠN")
                 for yk in ds_phan_hoi:
                     with st.expander(f"📩 Ý kiến: '{yk['noi_dung'][:30]}...' - BGĐ đã trả lời"):
                         st.write(f"**Nội dung gửi:** {yk['noi_dung']}")
@@ -430,7 +474,7 @@ elif st.session_state.page == "home":
 
     st.write("---")
 
-    # DANH SÁCH NÚT CHỨC NĂNG
+    # DÁCH SÁCH NÚT CHỨC NĂNG
     if st.button("1. 🚗 KHÁCH ĐẾN SHOWROOM", use_container_width=True, type="primary"):
         set_page("khach_den")
         st.rerun()
@@ -443,7 +487,7 @@ elif st.session_state.page == "home":
         set_page("tra_cuu")
         st.rerun()
 
-    if st.button("💡 ĐỀ XUẤT CỦA NHÂN VIÊN", use_container_width=True):
+    if st.button("💡 Ý KIẾN KHÁCH HÀNG & NHÂN VIÊN", use_container_width=True):
         set_page("gui_y_kien")
         st.rerun()
 
@@ -464,7 +508,7 @@ elif st.session_state.page == "home":
     st.write("---")
     if st.button("🚪 ĐĂNG XUẤT", key="btn_logout_home", use_container_width=True):
         dang_xuat()
-
+   
 # ------------------------------------------------------------------------------
 # KHÂU KHÁCH ĐẾN SHOWROOM
 # ------------------------------------------------------------------------------
@@ -476,8 +520,10 @@ elif st.session_state.page == "khach_den":
 
     xe_chon = st.selectbox("Dòng xe bạn quan tâm: *", cac_dong_xe)
 
+    # Hiển thị hình ảnh xe chọn
     hien_thi_anh_xe(xe_chon)
 
+    # Hiển thị phân tích nổi bật & các phiên bản
     with st.expander(f"🔍 Xem Chi tiết các phiên bản & Tính năng của {xe_chon}", expanded=True):
         hien_thi_thong_tin_so_sanh(xe_chon)
 
@@ -521,9 +567,10 @@ elif st.session_state.page == "khach_ve":
     da_coc = st.radio("Khách hàng đã đặt cọc xe chưa?", ["Chưa cọc (Chưa đặt)", "Đã đặt cọc xe"], horizontal=True)
     is_coc = (da_coc == "Đã đặt cọc xe")
 
-    ds_xe_da_xem = st.multiselect("Dòng xe khách đã xem: *", cac_dong_xe, default=[cac_dong_xe[0]] if cac_dong_xe else [])
+    ds_xe_da_xem = st.multiselect("Dòng xe khách đã xem: *", cac_dong_xe, default=[cac_dong_xe[0]])
 
     if ds_xe_da_xem:
+        # Hiển thị ảnh các xe được chọn
         cols = st.columns(len(ds_xe_da_xem))
         for idx, xe in enumerate(ds_xe_da_xem):
             with cols[idx]:
@@ -561,7 +608,7 @@ elif st.session_state.page == "khach_ve":
         st.rerun()
 
 # ------------------------------------------------------------------------------
-# MÀN HÌNH TRA CỨU BẢNG GIÁ / THÔNG SỐ XE
+# MÀN HÌNH TRA CỨU BẢNG GIÁ / THÔNG SỐ XE & XEM HÌNH ẢNH / SO SÁNH
 # ------------------------------------------------------------------------------
 elif st.session_state.page == "tra_cuu":
     st.markdown('<div class="sub-title">📋 TRA CỨU BẢNG GIÁ & THÔNG SỐ CÁC DÒNG XE</div>', unsafe_allow_html=True)
@@ -573,17 +620,11 @@ elif st.session_state.page == "tra_cuu":
     hien_thi_thong_tin_so_sanh(xe_xem_anh)
     
     st.write("---")
-    st.markdown("**📊 Bảng tổng hợp các dòng xe từ CSDL Supabase:**")
-    if not df_vinfast.empty:
-        df_display = df_vinfast.copy()
-        if "Giá niêm yết (VND)" in df_display.columns:
-            df_display["Giá niêm yết (VND)"] = df_display["Giá niêm yết (VND)"].apply(
-                lambda x: f"{float(x):,.0f} VNĐ" if pd.notnull(x) and str(x).replace('.','',1).isdigit() else f"{x} VNĐ"
-            )
-        st.dataframe(df_display, use_container_width=True, hide_index=True)
-    else:
-        st.info("Chưa có dữ liệu danh mục xe.")
-
+    st.markdown("**📊 Bảng tổng hợp tất cả 19 phiên bản các dòng xe:**")
+    df_display = df_vinfast.copy()
+    df_display["Giá niêm yết (VND)"] = df_display["Giá niêm yết (VND)"].apply(lambda x: f"{x:,.0f} VNĐ")
+    st.dataframe(df_display, use_container_width=True, hide_index=True)
+    
     st.write("---")
     if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
         set_page("home")
@@ -601,6 +642,7 @@ elif st.session_state.page == "bao_cao":
     if st.button("🔍 TRUY XUẤT DỮ LIỆU", type="primary", use_container_width=True):
         if supabase_client:
             try:
+                # 1. Truy vấn dữ liệu Khách Đến
                 res_den = supabase_client.table("khach_den") \
                     .select("*") \
                     .gte("thoi_gian", f"{str_ngay} 00:00:00") \
@@ -608,6 +650,7 @@ elif st.session_state.page == "bao_cao":
                     .execute()
                 data_den = res_den.data
 
+                # 2. Truy vấn dữ liệu Khách Về
                 res_ve = supabase_client.table("khach_ve") \
                     .select("*") \
                     .gte("thoi_gian", f"{str_ngay} 00:00:00") \
@@ -615,6 +658,7 @@ elif st.session_state.page == "bao_cao":
                     .execute()
                 data_ve = res_ve.data
 
+                # 3. Hiển thị KPIs
                 col1, col2, col3 = st.columns(3)
                 col1.metric("📥 Tổng Khách Đến", f"{len(data_den)} lượt")
                 col2.metric("📤 Tổng Khách Về", f"{len(data_ve)} lượt")
@@ -624,6 +668,7 @@ elif st.session_state.page == "bao_cao":
 
                 st.write("---")
 
+                # 4. Xe được quan tâm nhiều nhất
                 ds_xe = []
                 for item in data_den:
                     if item.get("dong_xe"):
@@ -695,7 +740,7 @@ elif st.session_state.page == "gui_y_kien":
         st.rerun()
 
 # ------------------------------------------------------------------------------
-# MÀN HÌNH QUẢN LÝ & PHẢN HỒI Ý KIẾN (BAN GIÁM ĐỐC)
+# MÀN HÌNH QUẢN LÝ & PHẢN HỒI Ý KIẾN (DÀNH CHO BAN GIÁM ĐỐC)
 # ------------------------------------------------------------------------------
 elif st.session_state.page == "quan_ly_y_kien":
     if st.session_state.user_info.get("chuc_vu") != "giam_doc":
@@ -712,7 +757,7 @@ elif st.session_state.page == "quan_ly_y_kien":
                 ds_y_kien = res.data or []
 
                 if not ds_y_kien:
-                    st.info("Hiện chưa có ý kiến đóng góp nào.")
+                    st.info("Hiện chưa có ý kiến đóng góp nào từ Khách hàng hoặc Nhân viên.")
                 else:
                     for item in ds_y_kien:
                         stt_phan_hoi = "✅ Đã trả lời" if item.get('phan_hoi') else "🔴 Chờ BGĐ trả lời"
@@ -724,10 +769,11 @@ elif st.session_state.page == "quan_ly_y_kien":
                             if item.get('phan_hoi'):
                                 st.success(f"💬 **Ban Giám Đốc đã trả lời ({item.get('thoi_gian_phan_hoi', '')[:16]}):**\n\n{item['phan_hoi']}")
                             
+                            # Form cho phép BGĐ nhập phản hồi hoặc chỉnh sửa câu trả lời
                             st.write("✍️ **Nhập / Cập nhật nội dung trả lời:**")
                             phan_hoi_text = st.text_area("Nội dung trả lời:", value=item.get('phan_hoi', '') or '', key=f"reply_{item['id']}")
                             
-                            if st.button("💾 Gửi phản hồi", key=f"btn_reply_{item['id']}", type="primary"):
+                            if st.button("💾 Gửi phản hồi tới người dùng", key=f"btn_reply_{item['id']}", type="primary"):
                                 if phan_hoi_text.strip():
                                     supabase_client.table("y_kien_dong_gop").update({
                                         "phan_hoi": phan_hoi_text.strip(),
@@ -744,9 +790,91 @@ elif st.session_state.page == "quan_ly_y_kien":
         if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
             set_page("home")
             st.rerun()
+# ------------------------------------------------------------------------------
+# MÀN HÌNH BẢNG QUẢN TRỊ BGĐ (QUẢN LÝ TK / THÔNG BÁO / TRẢ LỜI Ý KIẾN)
+# ------------------------------------------------------------------------------
+elif st.session_state.page == "quan_ly_bgd":
+    if st.session_state.user_info.get("chuc_vu") != "giam_doc":
+        st.error("🚫 Trang này chỉ dành cho Ban Giám Đốc!")
+    else:
+        st.markdown('<div class="sub-title">👑 BẢNG QUẢN TRỊ BAN GIÁM ĐỐC</div>', unsafe_allow_html=True)
+        
+        tab1, tab2, tab3 = st.tabs(["🔒 Quản lý Tài khoản NV", "📢 Gửi Thông báo Chung", "💬 Trả lời Ý kiến"])
+
+        # TAB 1: QUẢN LÝ / CHẶN TÀI KHOẢN NHÂN VIÊN
+        with tab1:
+            st.subheader("Danh sách Tài khoản Nhân viên")
+            search_nv = st.text_input("🔍 Tìm theo tên đăng nhập / Họ tên:", key="search_nv")
+            
+            res_nv = supabase_client.table("tai_khoan").select("*").neq("chuc_vu", "giam_doc").order("ten_dang_nhap").execute()
+            ds_nv = res_nv.data or []
+            
+            if search_nv:
+                ds_nv = [x for x in ds_nv if search_nv.lower() in x['ten_dang_nhap'].lower() or search_nv.lower() in (x.get('ho_ten') or '').lower()]
+
+            for nv in ds_nv[:20]:
+                col1, col2, col3 = st.columns([3, 2, 2])
+                with col1:
+                    st.write(f"**{nv['ten_dang_nhap']}** - {nv.get('ho_ten', 'Chưa khai báo')} ({nv.get('chuc_vu')})")
+                with col2:
+                    if nv.get("bi_khoa"):
+                        st.error("🔴 Đang bị khóa")
+                    else:
+                        st.success("🟢 Hoạt động")
+                with col3:
+                    if nv.get("bi_khoa"):
+                        if st.button("🔓 Mở khóa", key=f"unblock_{nv['ten_dang_nhap']}"):
+                            supabase_client.table("tai_khoan").update({"bi_khoa": False}).eq("ten_dang_nhap", nv['ten_dang_nhap']).execute()
+                            st.success("Đã mở khóa!"); st.rerun()
+                    else:
+                        if st.button("🔒 Chặn TK", key=f"block_{nv['ten_dang_nhap']}"):
+                            supabase_client.table("tai_khoan").update({"bi_khoa": True}).eq("ten_dang_nhap", nv['ten_dang_nhap']).execute()
+                            st.warning("Đã chặn tài khoản!"); st.rerun()
+
+        # TAB 2: GỬI THÔNG BÁO CHO TOÀN BỘ NHÂN VIÊN
+        with tab2:
+            st.subheader("📢 Gửi Thông Báo Tới Tất Cả Nhân Viên")
+            with st.form("form_thong_bao"):
+                tieu_de_tb = st.text_input("Tiêu đề thông báo:")
+                noi_dung_tb = st.text_area("Nội dung thông báo truyền đạt:")
+                btn_send_tb = st.form_submit_button("🚀 PHÁT THÔNG BÁO QUAN TRỌNG", type="primary")
+
+                if btn_send_tb:
+                    if tieu_de_tb and noi_dung_tb:
+                        supabase_client.table("thong_bao_chung").insert({
+                            "nguoi_gui": st.session_state.user_info.get("ho_ten", "Ban Giám Đốc"),
+                            "tieu_de": tieu_de_tb,
+                            "noi_dung": noi_dung_tb
+                        }).execute()
+                        st.success("✅ Đã gửi thông báo tới tất cả nhân viên!")
+                    else:
+                        st.error("Vui lòng điền đầy đủ tiêu đề và nội dung.")
+
+        # TAB 3: TRẢ LỜI Ý KIẾN ĐÓNG GÓP
+        with tab3:
+            st.subheader("💬 Quản lý & Phản hồi Ý kiến")
+            res_yk = supabase_client.table("y_kien_dong_gop").select("*").order("id", desc=True).execute()
+            for yk in (res_yk.data or []):
+                with st.expander(f"📩 [{yk['loai_y_kien']}] {yk['nguoi_gui']} - {yk['thoi_gian'][:16]}"):
+                    st.write(f"**Nội dung:** {yk['noi_dung']}")
+                    if yk.get("phan_hoi"):
+                        st.success(f"**BGĐ Trả lời:** {yk['phan_hoi']}")
+                    else:
+                        reply_txt = st.text_area("Nhập phản hồi:", key=f"r_{yk['id']}")
+                        if st.button("Gửi phản hồi", key=f"btn_r_{yk['id']}"):
+                            supabase_client.table("y_kien_dong_gop").update({
+                                "phan_hoi": reply_txt,
+                                "thoi_gian_phan_hoi": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                            }).eq("id", yk['id']).execute()
+                            st.success("Đã phản hồi!"); st.rerun()
+
+        st.write("---")
+        if st.button("🏠 QUAY LẠI MÀN HÌNH CHÍNH", use_container_width=True):
+            set_page("home")
+            st.rerun()
 
 # ------------------------------------------------------------------------------
-# MÀN HÌNH BAN GIÁM ĐỐC THÔNG BÁO
+# MÀN HÌNH BAN GIÁM ĐỐC THÔNG BÁO (TỰ ĐỘNG XÓA SAU 7 NGÀY)
 # ------------------------------------------------------------------------------
 elif st.session_state.page == "bgd_thong_bao":
     if st.session_state.user_info.get("chuc_vu") != "giam_doc":
