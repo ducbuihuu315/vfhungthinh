@@ -29,49 +29,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# --- HEADER: LOGO & CHÍNH SÁCH SHOWROOM HƯNG THỊNH PHÁT ---
-col_logo, col_banner = st.columns([1, 3])
 
-with col_logo:
-    # URL logo lấy trực tiếp hoặc upload lên dự án
-    st.image("https://vinfasthungthinhphat.vn/wp-content/uploads/2023/05/logo-vf-hung-thinh-phat.png", use_container_width=True)
-
-with col_banner:
-    st.markdown("""
-        <div class="policy-box">
-            <h4 style="color:#e01b22; margin:0;">VINFAST HƯNG THỊNH PHÁT</h4>
-            <p style="margin:5px 0 0 0; font-size:14px;">
-                <b>Chính sách ưu tiên:</b> Hỗ trợ 100% lệ phí trước bạ | Giao xe tận nhà | Ưu đãi lãi suất 0%
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
-
-st.divider()
-
-# 1. Lấy thông tin chức vụ
-user_info = st.session_state.get("user_info", {})
-chuc_vu = str(user_info.get("chuc_vu", "")).lower()
-is_giam_doc = chuc_vu in ["giam_doc", "giám đốc", "admin"]
-
-st.subheader("📋 Chính Sách & Chương Trình Ưu Đãi")
-
-# Nội dung chính sách (Lấy từ Session State hoặc CSDL)
-noidung_chinhsach = st.session_state.get(
-    "chinh_sach_text", 
-    "Đang áp dụng gói ưu đãi đặc biệt cho các dòng xe VinFast tại Showroom Hưng Thịnh Phát."
-)
-
-if is_giam_doc:
-    # --- QUYỀN GIÁM ĐỐC: Được chỉnh sửa ---
-    with st.expander("✏️ Chỉnh sửa chính sách showroom (Quyền BGĐ)", expanded=True):
-        new_text = st.text_area("Nội dung chính sách / Thông báo ưu tiên:", value=noidung_chinhsach, height=120)
-        if st.button("💾 Cập nhật chính sách", type="primary"):
-            st.session_state["chinh_sach_text"] = new_text
-            st.toast("Cập nhật chính sách thành công!", icon="✅")
-            st.rerun()
-else:
-    # --- QUYỀN NHÂN VIÊN: Chỉ xem ---
-    st.info(f"📌 **Nội dung áp dụng:**\n\n{noidung_chinhsach}")
 
 # ...==========================================
 
