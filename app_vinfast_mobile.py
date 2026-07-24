@@ -477,8 +477,8 @@ elif st.session_state.page == "home":
         st.rerun()
 
     if st.button("💡 Ý KIẾN KHÁCH HÀNG & NHÂN VIÊN", use_container_width=True):
-    set_page("loai_y_kien")
-    st.rerun()
+        set_page("gui_y_kien")
+        st.rerun()
 
     # PHÂN QUYỀN BAN GIÁM ĐỐC
     if user.get("chuc_vu") == "giam_doc":
