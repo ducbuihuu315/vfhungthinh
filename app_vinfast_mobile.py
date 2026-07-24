@@ -476,7 +476,7 @@ elif st.session_state.page == "home":
         set_page("tra_cuu")
         st.rerun()
 
-    if st.button("💡 ĐỀ XUẤT CỦA NHÂN VIÊN", use_container_width=True):
+    if st.button("Ý KIẾN KHÁCH HÀNG & NHÂN VIÊN", use_container_width=True):
         set_page("de_xuat")
         st.rerun()
 
